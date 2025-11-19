@@ -1,7 +1,40 @@
 ====== SAML Configuration Helper ======
 
-This tool helps you to find the right configuration paramters for the ADSF plugin by parsing the Federation metadata provided by your Identity Provider.
+This tool helps you to find the right configuration parameters for the SAML
+plugin by parsing the Federation metadata provided by your Identity Provider.
 
-For Active Directory Federation Services the metadata can be found at ''%%https://<your-adfs-server>/FederationMetadata/2007-06/FederationMetadata.xml%%''. Simply paste this URL (with the correct server name) below.
+===== URL Option =====
 
-Please note that PHP will check the certificate validity, so if you use a self signed or corporate internal certificate you need to download the file yourself and paste it into the XML field below.
+**Metadata Endpoint**
+
+For //Active Directory Federation Services// (ADFS) the metadata can be found at:
+
+''%%https://adfs.example.org/FederationMetadata/2007-06/FederationMetadata.xml%%''
+
+For //Shibboleth//, it's most often found at:
+
+''%%https://idp.example.edu/idp/shibboleth%%''
+
+Simply paste this URL (with the correct server name) below using the //Metadata Endpoint//
+formfield.
+
+This URL Option requires:
+
+   * ''DokuHTTPClient'' to be available
+   * The URL to be hosted using a trusted certificate
+
+The DokuHTTPClient will check the certificate validity of the
+the URL. So, if you use a self-signed or corporate internal certificate, you
+will need use the Copy/Paste Option instead.
+
+
+===== Copy/Paste Option =====
+
+**The XML Metadata**
+
+Obtain a copy of your identity providers' metadata (often hosted at one of the
+example URLs from the URL Option), and paste in the entire EntityDescriptor
+element into the //The XML Metadata// formfiled.
+
+Copy everything between ''%%<EntityDescriptor%%'' and
+''%%</EntityDescriptor>%%'' (including the ''%%EntityDescriptor%%'' tags themselves).

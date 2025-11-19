@@ -37,10 +37,59 @@ class admin_plugin_saml extends DokuWiki_Admin_Plugin
 
         $form = new \dokuwiki\Form\Form();
         $form->addFieldsetOpen('Federation Metadata');
-        $urlinput = $form->addTextInput('url', 'Metadata Endpoint');
-        if ($this->xml) $urlinput->val('')->useInput(false);
-        $form->addTextarea('xml', 'The XML Metadata')->val($this->xml)->useInput(false);
+
+
+        $form->addTag('div')->attr('style', 'margin-bottom: 1em;');
+
+        $form->addLabel('URL Option: Metadata Endpoint', "__url_input")
+             ->attr('style', 'font-weight: 800; display: block; margin-bottom: 0.5em;');
+        $url_input = $form->addTextInput('url')
+                ->id("__url_input")
+                ->attr("size", 60)
+                ->attr("placeholder", "https://idp.example.edu/idp/shibboleth");
+        if ($this->xml) $url_input->val('')->useInput(false);
+
+        $form->addTag('/div');
+
+
+        $form->addTag('div')->attr('style', 'margin-top: 2em;');
+        $form->addLabel('Copy/Paste Option: The XML Metadata', "__xml_input")
+             ->attr('style', 'font-weight: 800; display: block; margin-bottom: 1.5em;');
+
+        $metadata_placeholder = <<<METADATAPLACEHOLDER
+<EntityDescriptor entityID="https://example-idp.org/idp/shibboleth"
+  xmlns="urn:oasis:names:tc:SAML:2.0:metadata">
+    <IDPSSODescriptor protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol">
+        <KeyDescriptor use="signing">
+            <ds:KeyInfo>
+                <ds:X509Data>
+                    <ds:X509Certificate>
+MIIC+jCCAeKgAwIBAgIUA1EXAMPLEONLY1234567890ABCDEFG...
+                    </ds:X509Certificate>
+                </ds:X509Data>
+            </ds:KeyInfo>
+        </KeyDescriptor>
+        <SingleSignOnService
+            Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect"
+            Location="https://login.example.org/idp/profile/SAML2/Redirect/SSO"/>
+    </IDPSSODescriptor>
+</EntityDescriptor>
+METADATAPLACEHOLDER;
+
+        $xml_input = $form->addTextarea('xml')
+             ->id("__xml_input")
+             ->val($this->xml)
+             ->useInput(false)
+             ->attr('rows', 10)
+             ->attr('cols', 60)
+             ->attr('placeholder', $metadata_placeholder);
+
+        $form->addTag('/div');
+
+        $form->addTag('div')->attr('style', 'margin-top: 1em;');
         $form->addButton('go', 'Submit')->attr('type', 'submit');
+        $form->addTag('/div');
+
         $form->addFieldsetClose();
         echo $form->toHTML();
 
