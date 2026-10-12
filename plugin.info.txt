@@ -1,7 +1,7 @@
 base   saml
-author Sam Yelman
-email  sam.yelman@temple.edu
-date   2020-10-22
+author Andreas Gohr
+email  gohr@cosmocode.de
+date   2026-10-12
 name   SAML Auth plugin
-desc   Provides user authentication against SAML 2.0
-url    http://www.dokuwiki.org/plugin:saml
+desc   Provides user authentication against a SAML 2.0 identity provider
+url    https://www.dokuwiki.org/plugin:saml

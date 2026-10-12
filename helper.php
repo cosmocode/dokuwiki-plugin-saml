@@ -1,100 +1,33 @@
 <?php
 
+use dokuwiki\Extension\Plugin;
+use dokuwiki\plugin\saml\Settings;
+use OneLogin\Saml2\Auth;
+
 /**
  * SAML authentication plugin
  *
  * @author     Andreas Gohr <gohr@cosmocode.de>
  * @author     Sam Yelman <sam.yelman@temple.edu>
  */
-class helper_plugin_saml extends auth_plugin_authplain
+class helper_plugin_saml extends Plugin
 {
-    /** @var OneLogin_Saml2_Auth */
+    /** @var Auth the SAML authentication library */
     protected $saml;
 
     /**
-     * Get the initialized SAML library
+     * The SAML library, set up with the configuration of this plugin
      *
-     * @return OneLogin_Saml2_Auth
+     * @return Auth
+     * @throws Exception when the configuration is not valid
      */
     public function getSamlLib()
     {
         if ($this->saml === null) {
-            require_once __DIR__ . '/phpsaml/_toolkit_loader.php';
-            $this->saml = new OneLogin_Saml2_Auth($this->createSettings());
+            if (!$this->configloaded) $this->loadConfig();
+            $settings = new Settings($this->conf);
+            $this->saml = new Auth($settings->toArray());
         }
         return $this->saml;
-    }
-
-    /**
-     * Initializes the settings array for the PHP SAML library
-     *
-     * @return array
-     */
-    protected function createSettings()
-    {
-        global $conf;
-		$xml_wiki_title = htmlentities($conf['title']);
-
-        $cert = $this->getConf('certificate');
-        $cert = wordwrap($cert, 65, "\n", true);
-        $cert = trim($cert);
-        if (!preg_match('/^-----BEGIN CERTIFICATE-----.*-----END CERTIFICATE-----$/s', $cert)) {
-            $cert = "-----BEGIN CERTIFICATE-----\n$cert\n-----END CERTIFICATE-----";
-        }
-
-        return [
-            'strict' => true,
-            'debug' => false,
-            'baseurl' => DOKU_URL,
-
-            // Our own meta data
-            'sp' => [
-                'entityId' => DOKU_URL,
-                'assertionConsumerService' => [
-                    'url' => DOKU_URL . DOKU_SCRIPT,
-                    'binding' => OneLogin_Saml2_Constants::BINDING_HTTP_POST,
-                ],
-                'attributeConsumingService' => [
-                    'serviceName' => $xml_wiki_title,
-                    "serviceDescription" => 'SAML auth plugin',
-                    "requestedAttributes" => [],
-                ],
-                'singleLogoutService' => [
-                    'url' => wl('', array('do' => 'logout'), true, '&'),
-                    'binding' => OneLogin_Saml2_Constants::BINDING_HTTP_REDIRECT,
-                ],
-                'NameIDFormat' => OneLogin_Saml2_Constants::NAMEID_EMAIL_ADDRESS,
-            ],
-
-            // The SAML server we talk to
-            'idp' => [
-                'entityId' => $this->getConf('idPEntityID'),
-                'singleSignOnService' => [
-                    'url' => $this->getConf('endpoint'),
-                    'binding' => OneLogin_Saml2_Constants::BINDING_HTTP_REDIRECT,
-                ],
-                'singleLogoutService' => [
-                    'url' => $this->getConf('slo_endpoint'),
-                    'binding' => OneLogin_Saml2_Constants::BINDING_HTTP_REDIRECT,
-                ],
-                'NameIDFormat' => OneLogin_Saml2_Constants::NAMEID_UNSPECIFIED,
-                'x509cert' => $cert,
-            ],
-
-            'security' => [
-                'requestedAuthnContext' => false, // We let the AD decide what kind of authentication it uses
-                'wantNameId' => false, // Seems not to work otherwise
-                'destinationStrictlyMatches' => false,
-                'allowRepeatAttributeName' => true
-            ],
-
-            'organization' => array(
-                'en-US' => array(
-                    'name' => $xml_wiki_title,
-                    'displayname' => $xml_wiki_title,
-                    'url' => DOKU_URL
-                ),
-            ),
-        ];
     }
 }

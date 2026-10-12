@@ -1,16 +1,21 @@
 SAML Plugin for DokuWiki
 
-Provides user authentication against Active Directory Federation
-Service via SAML 2.0
+Provides user authentication against a SAML 2.0 identity provider,
+for example Keycloak, Active Directory Federation Services (ADFS)
+or Shibboleth.
 
 All documentation for this plugin can be found at
-http://www.dokuwiki.org/plugin:saml
+https://www.dokuwiki.org/plugin:saml
 
 If you install this plugin manually, make sure it is installed in
 lib/plugins/saml/ - if the folder is called different it
 will not work!
 
-Please refer to http://www.dokuwiki.org/plugins for additional info
+The plugin needs the libraries in the vendor/ directory. A release
+archive contains them. After a checkout of the sources run
+"composer install --no-dev" in the plugin directory.
+
+Please refer to https://www.dokuwiki.org/plugins for additional info
 on how to install plugins in DokuWiki.
 
 ----

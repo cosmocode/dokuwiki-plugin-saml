@@ -15,6 +15,13 @@ For //Shibboleth//, it's most often found at:
 
 ''%%https://idp.example.edu/idp/shibboleth%%''
 
+For //Keycloak//, it's found at:
+
+''%%https://keycloak.example.org/realms/<your-realm>/protocol/saml/descriptor%%''
+
+There is no common URL for all Identity Providers. SAML 2.0 has no discovery
+like the ''.well-known'' URLs of OpenID Connect.
+
 Simply paste this URL (with the correct server name) below using the //Metadata Endpoint//
 formfield.
 

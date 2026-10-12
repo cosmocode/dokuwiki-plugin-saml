@@ -1,26 +1,35 @@
 <?php
+
+use dokuwiki\plugin\saml\Session;
+use dokuwiki\plugin\saml\UserMapper;
+use OneLogin\Saml2\Auth;
+
 /**
  * SAML authentication plugin
  *
  * @author     Andreas Gohr <gohr@cosmocode.de>
  * @author     Sam Yelman <sam.yelman@temple.edu>
  */
-
-use dokuwiki\Utf8\PhpString;
-
 class auth_plugin_saml extends auth_plugin_authplain
 {
-    /** @var OneLogin_Saml2_Auth the SAML authentication library */
+    /** @var Auth the SAML authentication library */
     protected $saml;
+
+    /** @var UserMapper the user data of a SAML response */
+    protected $mapper;
+
+    /** @var Session the data of this plugin in the PHP session */
+    protected $session;
 
     /** @inheritdoc */
     public function __construct()
     {
         parent::__construct();
+        $this->loadConfig();
 
         $this->cando['external'] = true;
-        /* logout makes no sense in case auf always auto_login */
-        $this->cando['logout'] = $this->getConf("auto_login") !== 'always';
+        /* logout makes no sense in case of always auto_login */
+        $this->cando['logout'] = $this->getConf('auto_login') !== 'always';
         /* We only want auth_plain for e-mail tracking and group storage */
         $this->cando['addUser'] = false;
         $this->cando['modLogin'] = false;
@@ -28,6 +37,9 @@ class auth_plugin_saml extends auth_plugin_authplain
         $this->cando['modName'] = false;
         $this->cando['modMail'] = false;
         $this->cando['modGroups'] = false;
+
+        $this->mapper = new UserMapper($this->conf);
+        $this->session = new Session();
 
         /** @var helper_plugin_saml $hlp */
         $hlp = plugin_load('helper', 'saml');
@@ -37,214 +49,229 @@ class auth_plugin_saml extends auth_plugin_authplain
     /**
      * Checks the session to see if the user is already logged in
      *
-     * If not logged in, redirects to SAML provider
+     * If not logged in, redirects to the SAML identity provider
+     *
+     * @inheritdoc
      */
     public function trustExternal($user, $pass, $sticky = false)
     {
-        global $USERINFO;
         global $ID;
         global $ACT;
-
-        $autoLogin = false;
+        global $INPUT;
 
         if (empty($ID)) $ID = getID();
 
         // trust session info, no need to recheck
-        if (isset($_SESSION[DOKU_COOKIE]['auth']) &&
-            $_SESSION[DOKU_COOKIE]['auth']['buid'] == auth_browseruid() &&
-            isset($_SESSION[DOKU_COOKIE]['auth']['user'])
-        ) {
-
-            $_SERVER['REMOTE_USER'] = $_SESSION[DOKU_COOKIE]['auth']['user'];
-            $USERINFO = $_SESSION[DOKU_COOKIE]['auth']['info'];
-
+        $login = $this->session->getLogin();
+        if ($login !== null) {
+            $this->setCurrentUser($login['info']);
             return true;
-        } else {
-            $autoLoginConf = $this->getConf("auto_login");
-            $autoLogin = ($autoLoginConf == "never") ? false : (
-                ($autoLoginConf == "after login" && get_doku_pref('saml_autologin', 0)) ||
-                ($autoLoginConf == "always"));
         }
 
-        if (!isset($_POST['SAMLResponse']) && ($ACT == 'login' || $autoLogin)) {
-            // Initiate SAML auth request
-            $url = $this->saml->login(
-                null, // returnTo: is configured in our settings
-                [], // parameter: we do not send any additional paramters to ndreas
-                false, // forceAuthn: would skip any available SSO data, not what we want
-                false, // isPassive: would avoid all user interaction, not what we want
-                true, // stay: do not redirect, we do that ourselves
-                false // setNamedIdPolicy: we need to disable this or SAML complains about our request
-            );
-            $_SESSION['saml_redirect'] = wl($ID, '', true, '&'); // remember current page
-            send_redirect($url);
-        } elseif (isset($_POST['SAMLResponse'])) {
-            // consume SAML response
-            try {
-                $this->saml->processResponse();
-                if ($this->saml->isAuthenticated()) {
-                    // Always read the userid from the saml response
-                    $USERINFO = $this->getUserDataFromResponse();
-                    $_SERVER['REMOTE_USER'] = $USERINFO['user'];
-
-                    if ($this->getConf('autoprovisioning')) {
-                        // In case of auto-provisionning we override the local DB info with those retrieve during the SAML negociation
-                        if ( $this->getUserData($USERINFO['user']) === false ) {
-                            $this->triggerUserMod('create', array(
-                                $USERINFO['user'],
-                                "\0\0nil\0\0",
-                                $USERINFO['name'],
-                                $USERINFO['mail'],
-                                $USERINFO['grps']
-                            ));
-                        } else {
-                            $this->triggerUserMod('modify', array(
-                                  $USERINFO['user'],
-                                  $USERINFO
-                            ));
-                        }
-                    } else {
-                        // In case the autoprovisionning is disabled we rely on the local DB for the info such as the group and the fullname.
-                        // It also means that the user should exists already in the DB
-                        $dbUserInfo = $this->getUserData($USERINFO['user']);
-                        if($dbUserInfo === false) throw new \Exception('This user is not in the local user database and may not login');
-                        $USERINFO['name'] = $dbUserInfo["name"];
-                        $USERINFO['mail'] = $dbUserInfo["mail"];
-                        $USERINFO['grps'] = $dbUserInfo["grps"];
-                    }
-
-                    // Store that in the cookie
-                    $_SESSION[DOKU_COOKIE]['auth']['user'] = $_SERVER['REMOTE_USER'];
-                    $_SESSION[DOKU_COOKIE]['auth']['info'] = $USERINFO;
-                    $_SESSION[DOKU_COOKIE]['auth']['buid'] = auth_browseruid(); // cache login
-
-                    // successful login
-                    if (isset($_SESSION['saml_redirect'])) {
-                        $go = $_SESSION['saml_redirect'];
-                        unset($_SESSION['saml_redirect']);
-                    } else {
-                        $go = wl($ID, '', true, '&');
-                    }
-                    set_doku_pref('saml_autologin', 1);
-                    send_redirect($go); // decouple the history from POST
-                    return true;
-                } else {
-                    $this->logOff();
-
-                    msg('SAML: '.hsc($this->saml->getLastErrorReason()), -1);
-                    return false;
-                }
-            } catch (Exception $e) {
-                $this->logOff();
-                msg('Invalid SAML response: ' . hsc($e->getMessage()), -1);
-                return false;
-            }
+        if ($INPUT->post->has('SAMLResponse')) {
+            return $this->processResponse();
         }
+
+        // the core cleans $ACT only later, in act_dispatch()
+        if (act_clean($ACT) == 'login' || $this->isAutoLogin()) {
+            $this->startLogin();
+        }
+
         // no login happened
         return false;
     }
 
-
     /** @inheritdoc */
     public function logOff()
     {
-		global $ID;
+        global $ID;
+        global $INPUT;
+
         set_doku_pref('saml_autologin', 0);
 
-		$hlp = plugin_load('helper', 'saml');
-		$saml = $hlp->getSamlLib();
+        /* By default, try to return the user to the page they were just viewing */
+        $redirTo = wl($ID, '', true, '&');
 
-		/* By default, try to return to user to the page they were just viewing */
-		$redirTo = wl($ID, '', true, '&');
+        if ($INPUT->get->has('SAMLResponse') || $INPUT->get->has('SAMLRequest')) {
+            /* Process a logout request or response of the identity provider */
+            $this->saml->processSLO();
+            $errors = $this->saml->getErrors();
+            if ($errors) {
+                msg('SAML SLO: ' . hsc(implode(', ', $errors) . '; ' . $this->saml->getLastErrorReason()), -1);
+            }
 
-		/* Proccess an SLO request or response */
-		if(isset($_GET["SAMLResponse"]) || isset($_GET["SAMLRequest"])) {
-			$saml->processSLO();
-			$errors = $saml->getErrors();
+            /* If a RelayState is defined in the request, this is where we want to go afterwards */
+            if ($INPUT->get->has('RelayState')) $redirTo = $INPUT->get->str('RelayState');
+        } elseif ($this->getConf('use_slo')) {
+            /* The user started the logout in the wiki itself */
+            $this->saml->logout($redirTo);
+        }
 
-			if (!empty($errors)) {
-				  msg('SAML SLO: '. implode(', ', $errors) . '; ' . $saml->getLastErrorReason(), -1);
-			}
-
-			/* If a RelayState is defined in the Request, this is where we want to redirect to afterwards */
-			if(isset($_GET["RelayState"])) $redirTo = $_GET["RelayState"];
-
-		/* If user initiates logout from the wiki itself */
-		} else if($this->getConf('use_slo')) {
-			$saml->logout($redirTo);
-		}
-
-		/* Manually redirect user if we ever get here */
-		send_redirect($redirTo);
+        /* Manually redirect the user if we ever get here */
+        send_redirect($redirTo);
     }
 
     /** @inheritdoc */
     public function cleanUser($user)
     {
-        // strip disallowed characters
-        $user = strtr(
-            $user, array(
-                ',' => '',
-                '/' => '',
-                '#' => '',
-                ';' => '',
-                ':' => ''
-            )
-        );
-        if ($this->getConf('lowercase')) {
-            return PhpString::strtolower($user);
-        } else {
-            return $user;
-        }
+        return $this->mapper->cleanUser($user);
     }
 
     /** @inheritdoc */
     public function cleanGroup($group)
     {
-        return $this->cleanUser($group);
+        return $this->mapper->cleanGroup($group);
     }
 
+    /**
+     * Send the user to the identity provider
+     *
+     * @return void
+     */
+    protected function startLogin()
+    {
+        global $ID;
+
+        $url = $this->saml->login(
+            null, // returnTo: we keep the target page in our session, not in the RelayState
+            [], // parameter: we do not send any additional parameters
+            false, // forceAuthn: would skip any available SSO data, not what we want
+            false, // isPassive: would avoid all user interaction, not what we want
+            true, // stay: do not redirect, we do that ourselves
+            false // setNameIdPolicy: we need to disable this or SAML complains about our request
+        );
+        $this->session->setRedirect(wl($ID, '', true, '&')); // remember current page
+        send_redirect($url);
+    }
 
     /**
-     * Build user data from the response
+     * Log the user in with the response of the identity provider
      *
-     * @return array the user data
-     * @throws Exception when attributes are missing
+     * @return bool true when the login succeeded
      */
-    protected function getUserDataFromResponse()
+    protected function processResponse()
     {
-        global $conf;
+        global $ID;
 
-        // which attributes should be in the response?
-        $attributes = [
-            'user' => $this->getConf('userid_attr_name')
-        ];
-        if ($this->getConf('autoprovisioning')) {
-            $attributes['name'] = $this->getConf('fullname_attr_name');
-            if (empty($attributes['name'])) $attributes['name'] = $attributes['user']; // fall back to login
-            $attributes['mail'] = $this->getConf('email_attr_name');
-            $attributes['grps'] = $this->getConf('groups_attr_name');
-            if (empty($attributes['grps'])) unset($attributes['grps']); // groups are optional
-        }
-
-        // get attributes from response
-        $userdata = ['user' => '', 'mail' => '', 'name' => '', 'grps' => []];
-        foreach ($attributes as $key => $attr) {
-            $data = $this->saml->getAttribute($attr);
-            if (($attr !== $attributes['grps']) and ($data === null)) {
-                throw new \Exception('SAML Response is missing attribute ' . $attr);
+        try {
+            $this->saml->processResponse();
+            if (!$this->saml->isAuthenticated()) {
+                return $this->abortLogin('SAML: ' . hsc($this->saml->getLastErrorReason()));
             }
-            $userdata[$key] = $data;
+
+            // always read the user id from the SAML response
+            $userinfo = $this->mapper->getUserData($this->saml);
+
+            if ($this->getConf('autoprovisioning')) {
+                $this->provisionUser($userinfo);
+            } else {
+                $userinfo = $this->addLocalUserData($userinfo);
+            }
+
+            // the user is known now, only now they become the user of this request
+            $this->setCurrentUser($userinfo);
+            $this->session->setLogin($userinfo['user'], $userinfo);
+            set_doku_pref('saml_autologin', 1);
+
+            // successful login
+            $go = $this->session->getRedirect() ?: wl($ID, '', true, '&');
+            $this->session->clearRedirect();
+            send_redirect($go); // decouple the history from POST
+            return true;
+        } catch (Exception $e) {
+            return $this->abortLogin('Invalid SAML response: ' . hsc($e->getMessage()));
+        }
+    }
+
+    /**
+     * Make the given user the user of this request
+     *
+     * @param array $userinfo the user data
+     * @return void
+     */
+    protected function setCurrentUser($userinfo)
+    {
+        global $USERINFO;
+        global $INPUT;
+
+        $USERINFO = $userinfo;
+        $INPUT->server->set('REMOTE_USER', $userinfo['user']);
+    }
+
+    /**
+     * Refuse the login and tell the user why
+     *
+     * Does not start a logout at the identity provider: the user has no SAML session yet
+     * and an error of the logout would hide the error of the login.
+     *
+     * @param string $reason the message for the user
+     * @return false
+     */
+    protected function abortLogin($reason)
+    {
+        set_doku_pref('saml_autologin', 0); // do not try again on the next request
+        $this->session->clearRedirect();
+        msg($reason, -1);
+        return false;
+    }
+
+    /**
+     * Create or update the local user with the data of the SAML response
+     *
+     * @param array $userinfo the user data of the response
+     * @return void
+     */
+    protected function provisionUser($userinfo)
+    {
+        if ($this->getUserData($userinfo['user']) === false) {
+            $this->triggerUserMod('create', [
+                $userinfo['user'],
+                "\0\0nil\0\0",
+                $userinfo['name'],
+                $userinfo['mail'],
+                $userinfo['grps']
+            ]);
+        } else {
+            $this->triggerUserMod('modify', [
+                $userinfo['user'],
+                $userinfo
+            ]);
+        }
+    }
+
+    /**
+     * Add the data of the local user to the user data of the SAML response
+     *
+     * Without auto provisioning the wiki keeps name, mail and groups itself and the user
+     * has to exist already.
+     *
+     * @param array $userinfo the user data of the response
+     * @return array the user data of the local user database
+     * @throws Exception when the user does not exist in the local user database
+     */
+    protected function addLocalUserData($userinfo)
+    {
+        $local = $this->getUserData($userinfo['user']);
+        if ($local === false) {
+            throw new Exception('This user is not in the local user database and may not login');
         }
 
-        // clean up data
-        $userdata['user'] = $this->cleanUser($userdata['user'][0]);
-        $userdata['name'] = $userdata['name'][0];
-        $userdata['mail'] = $userdata['mail'][0];
-        $userdata['grps'] = (array)$userdata['grps'];
-        $userdata['grps'][] = $conf['defaultgroup'];
-        $userdata['grps'] = array_map([$this, 'cleanGroup'], $userdata['grps']);
+        $userinfo['name'] = $local['name'];
+        $userinfo['mail'] = $local['mail'];
+        $userinfo['grps'] = $local['grps'];
+        return $userinfo;
+    }
 
-        return $userdata;
+    /**
+     * Should the user be sent to the identity provider without a click on the login button?
+     *
+     * @return bool
+     */
+    protected function isAutoLogin()
+    {
+        $mode = $this->getConf('auto_login');
+        if ($mode == 'always') return true;
+        if ($mode == 'after login') return (bool)get_doku_pref('saml_autologin', 0);
+        return false;
     }
 }

@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Configuration defaults for SAML Auth
 */

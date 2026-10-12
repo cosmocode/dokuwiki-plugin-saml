@@ -1,0 +1,11 @@
+{
+    "require": {
+        "php": ">=8.2",
+        "onelogin/php-saml": "^4.3"
+    },
+    "config": {
+        "platform": {
+            "php": "8.2"
+        }
+    }
+}

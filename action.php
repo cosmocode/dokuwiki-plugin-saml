@@ -1,71 +1,105 @@
 <?php
 
+use dokuwiki\Extension\ActionPlugin;
+use dokuwiki\Extension\Event;
+use dokuwiki\Extension\EventHandler;
+use dokuwiki\Form\Form;
+
 /**
  * SAML authentication plugin
  *
  * @author     Andreas Gohr <gohr@cosmocode.de>
  * @author     Sam Yelman <sam.yelman@temple.edu>
  */
-class action_plugin_saml extends DokuWiki_Action_Plugin
+class action_plugin_saml extends ActionPlugin
 {
-
     /** @inheritdoc */
-    public function register(Doku_Event_Handler $controller)
+    public function register(EventHandler $controller)
     {
-        $controller->register_hook('ACTION_ACT_PREPROCESS', 'BEFORE', $this, 'handle_request');
-        $controller->register_hook('HTML_LOGINFORM_OUTPUT', 'BEFORE', $this, 'handle_loginform');
+        $controller->register_hook('ACTION_ACT_PREPROCESS', 'BEFORE', $this, 'handleLogoutMessage');
+        $controller->register_hook('ACTION_ACT_PREPROCESS', 'BEFORE', $this, 'handleMetadata');
+        $controller->register_hook('FORM_LOGIN_OUTPUT', 'BEFORE', $this, 'handleLoginForm');
+    }
+
+    /**
+     * Log the user out when the identity provider asks for it
+     *
+     * The core logout action refuses a request without a security token, which a message
+     * of the identity provider does not have. The logout runs here instead. auth_logoff()
+     * ends the local session and then calls the logOff() of the plugin, which answers the
+     * identity provider.
+     *
+     * @param Event $event
+     * @param mixed $param
+     * @return void
+     */
+    public function handleLogoutMessage(Event $event, $param)
+    {
+        global $auth;
+        global $INPUT;
+
+        if (!$auth instanceof auth_plugin_saml) return;
+        if (act_clean($event->data) != 'logout') return;
+        if (!$this->getConf('use_slo')) return;
+        if (!$INPUT->get->has('SAMLResponse') && !$INPUT->get->has('SAMLRequest')) return;
+
+        $event->preventDefault();
+        $event->stopPropagation();
+        auth_logoff();
     }
 
     /**
      * Send the Federation Metadata about this Service Provider
-     * Otherwise, handle Logout for SAML plugin
-     * 
-     * @param Doku_Event $event
+     *
+     * @param Event $event
      * @param mixed $param
+     * @return void
      */
-    public function handle_request(Doku_Event $event, $param)
+    public function handleMetadata(Event $event, $param)
     {
-        global $ID;
-		global $auth;
-        $act = act_clean($event->data);
-		if($act == "logout" && $this->getConf('use_slo') && 
-			(isset($_GET["SAMLResponse"]) || isset($_GET["SAMLRequest"]))) {
-			$auth->logOff();
-		}
-        if ($act != 'saml') return;
+        if (act_clean($event->data) != 'saml') return;
         $event->preventDefault();
         $event->stopPropagation();
 
         /** @var helper_plugin_saml $hlp */
         $hlp = plugin_load('helper', 'saml');
-        $saml = $hlp->getSamlLib();
-
- 
 
         try {
-            header('Content-Type: application/samlmetadata+xml');
-            header('Content-Disposition: attachment; filename="saml-metadata.xml"');
-            $xml = $saml->getSettings()->getSPMetadata();
-            echo $xml;
-            exit();
+            $xml = $hlp->getSamlLib()->getSettings()->getSPMetadata();
         } catch (Exception $e) {
-            die(hsc($e->getMessage()));
+            http_status(500);
+            echo hsc($e->getMessage());
+            exit();
         }
+
+        header('Content-Type: application/samlmetadata+xml');
+        header('Content-Disposition: attachment; filename="saml-metadata.xml"');
+        echo $xml;
+        exit();
     }
 
     /**
-     * Disable the login forma and instead use a link to trigger login
+     * Disable the login form and instead use a button to trigger the login
      *
-     * @param Doku_Event $event
-     * @param $param
+     * @param Event $event
+     * @param mixed $param
+     * @return void
      */
-    public function handle_loginform(Doku_Event $event, $param)
+    public function handleLoginForm(Event $event, $param)
     {
-        global $ID;
         global $conf;
         if ($conf['authtype'] != 'saml') return;
 
-        $event->data = new Doku_Form(array());
-        $event->data->addElement('<a href="' . wl($ID, array('do' => 'login')) . '">Login here</a>');
+        /** @var Form $form */
+        $form = $event->data;
+
+        // the form keeps the action and the hidden fields, we only replace its contents
+        for ($pos = $form->elementCount(); $pos > 0; $pos--) {
+            $form->removeElement($pos - 1);
+        }
+
+        $form->addFieldsetOpen($this->getLang('login'));
+        $form->addButton('', $this->getLang('login'))->attr('type', 'submit');
+        $form->addFieldsetClose();
     }
 }
