@@ -76,9 +76,16 @@ class Settings
             ],
 
             'security' => [
+                'authnRequestsSigned' => (bool)$this->conf['sign_requests'],
+                'logoutRequestSigned' => (bool)$this->conf['sign_requests'],
+                'logoutResponseSigned' => (bool)$this->conf['sign_requests'],
                 // the metadata of this wiki carries our signature, so an identity
                 // provider that reads it knows that it is ours
                 'signMetadata' => true,
+                // the library refuses a response without any signature in every case.
+                // This demands a signature of the assertion itself.
+                'wantAssertionsSigned' => (bool)$this->conf['want_assertions_signed'],
+                'wantAssertionsEncrypted' => (bool)$this->conf['want_encrypted'],
                 // every identity provider understands SHA-256, a stronger hash brings
                 // nothing here and not all of them support it
                 'signatureAlgorithm' => XMLSecurityKey::RSA_SHA256,
