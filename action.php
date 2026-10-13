@@ -99,7 +99,7 @@ class action_plugin_saml extends ActionPlugin
         }
 
         $form->addFieldsetOpen($this->getLang('login'));
-        $form->addButton('', $this->getLang('login'))->attr('type', 'submit');
+        $form->addButton('', hsc($this->getLang('login')))->attr('type', 'submit');
         $form->addFieldsetClose();
     }
 }
