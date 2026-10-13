@@ -109,6 +109,19 @@ class SettingsTest extends DokuWikiTest
     }
 
     /**
+     * The library checks the response as strictly as the plugin needs it
+     */
+    public function testSecurity()
+    {
+        $settings = (new Settings($this->getConf()))->toArray();
+
+        $this->assertTrue($settings['strict']);
+        $this->assertTrue($settings['security']['destinationStrictlyMatches']);
+        $this->assertFalse($settings['security']['rejectUnsolicitedResponsesWithInResponseTo']);
+        $this->assertFalse($settings['security']['requestedAuthnContext']);
+    }
+
+    /**
      * The metadata of this service provider is valid
      */
     public function testMetadata()
