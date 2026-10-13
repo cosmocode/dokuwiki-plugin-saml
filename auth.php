@@ -1,5 +1,6 @@
 <?php
 
+use dokuwiki\plugin\saml\ReplayCache;
 use dokuwiki\plugin\saml\Session;
 use dokuwiki\plugin\saml\UserMapper;
 use OneLogin\Saml2\Auth;
@@ -21,6 +22,9 @@ class auth_plugin_saml extends auth_plugin_authplain
     /** @var Session the data of this plugin in the PHP session */
     protected $session;
 
+    /** @var ReplayCache the assertions that were used already */
+    protected $replay;
+
     /** @inheritdoc */
     public function __construct()
     {
@@ -40,6 +44,7 @@ class auth_plugin_saml extends auth_plugin_authplain
 
         $this->mapper = new UserMapper($this->conf);
         $this->session = new Session();
+        $this->replay = new ReplayCache();
 
         /** @var helper_plugin_saml $hlp */
         $hlp = plugin_load('helper', 'saml');
@@ -100,11 +105,11 @@ class auth_plugin_saml extends auth_plugin_authplain
                 msg('SAML SLO: ' . hsc(implode(', ', $errors) . '; ' . $this->saml->getLastErrorReason()), -1);
             }
 
-            /* If a RelayState is defined in the request, this is where we want to go afterwards */
-            if ($INPUT->get->has('RelayState')) $redirTo = $INPUT->get->str('RelayState');
+            /* The RelayState holds the page that the user wanted */
+            $redirTo = $this->getTarget($INPUT->get->str('RelayState'));
         } elseif ($this->getConf('use_slo')) {
             /* The user started the logout in the wiki itself */
-            $this->saml->logout($redirTo);
+            $this->saml->logout($ID); // returnTo: comes back as the RelayState
         }
 
         /* Manually redirect the user if we ever get here */
@@ -133,14 +138,14 @@ class auth_plugin_saml extends auth_plugin_authplain
         global $ID;
 
         $url = $this->saml->login(
-            null, // returnTo: we keep the target page in our session, not in the RelayState
+            $ID, // returnTo: the identity provider sends this page back as the RelayState
             [], // parameter: we do not send any additional parameters
             false, // forceAuthn: would skip any available SSO data, not what we want
             false, // isPassive: would avoid all user interaction, not what we want
             true, // stay: do not redirect, we do that ourselves
             false // setNameIdPolicy: we need to disable this or SAML complains about our request
         );
-        $this->session->setRedirect(wl($ID, '', true, '&')); // remember current page
+        $this->session->setRequestId($this->saml->getLastRequestID()); // check the answer
         send_redirect($url);
     }
 
@@ -152,12 +157,26 @@ class auth_plugin_saml extends auth_plugin_authplain
     protected function processResponse()
     {
         global $ID;
+        global $INPUT;
+
+        // A response answers the request of this session, one time only. The session may
+        // be empty: the browser does not send its cookie with a cross site POST.
+        $requestId = $this->session->getRequestId();
+        $this->session->clearRequestId();
+        if ($requestId === null && !$this->getConf('allow_unsolicited')) {
+            return $this->abortLogin($this->getLang('err_unsolicited'));
+        }
 
         try {
-            $this->saml->processResponse();
+            $this->saml->processResponse($requestId);
             if (!$this->saml->isAuthenticated()) {
                 return $this->abortLogin('SAML: ' . hsc($this->saml->getLastErrorReason()));
             }
+
+            if ($this->replay->isKnown($this->saml->getLastAssertionId())) {
+                return $this->abortLogin($this->getLang('err_replay'));
+            }
+            $this->replay->add($this->saml->getLastAssertionId(), $this->saml->getLastAssertionNotOnOrAfter());
 
             // always read the user id from the SAML response
             $userinfo = $this->mapper->getUserData($this->saml);
@@ -171,16 +190,38 @@ class auth_plugin_saml extends auth_plugin_authplain
             // the user is known now, only now they become the user of this request
             $this->setCurrentUser($userinfo);
             $this->session->setLogin($userinfo['user'], $userinfo);
+            $this->session->setExpiry($this->saml->getSessionExpiration());
             set_doku_pref('saml_autologin', 1);
 
-            // successful login
-            $go = $this->session->getRedirect() ?: wl($ID, '', true, '&');
-            $this->session->clearRedirect();
-            send_redirect($go); // decouple the history from POST
+            // successful login, the RelayState holds the page that the user wanted
+            send_redirect($this->getTarget($INPUT->post->str('RelayState'))); // not the POST
             return true;
         } catch (Exception $e) {
             return $this->abortLogin('Invalid SAML response: ' . hsc($e->getMessage()));
         }
+    }
+
+    /**
+     * The address of the page that a RelayState names
+     *
+     * The identity provider sends the RelayState of our message back, which holds the ID
+     * of the page that the user wanted. The session cannot hold that page, because the
+     * browser does not send the session cookie with a cross site POST. The wiki builds
+     * the address itself, so a RelayState of somebody else cannot send the user to
+     * another site.
+     *
+     * @param string $relay the RelayState of the message
+     * @return string the address of the page, the current page when the RelayState
+     *                holds no page ID of this wiki
+     */
+    protected function getTarget($relay)
+    {
+        global $ID;
+
+        $page = cleanID((string)$relay);
+        if ($page === '' || $page !== $relay) $page = $ID;
+
+        return wl($page, '', true, '&');
     }
 
     /**
@@ -210,7 +251,6 @@ class auth_plugin_saml extends auth_plugin_authplain
     protected function abortLogin($reason)
     {
         set_doku_pref('saml_autologin', 0); // do not try again on the next request
-        $this->session->clearRedirect();
         msg($reason, -1);
         return false;
     }

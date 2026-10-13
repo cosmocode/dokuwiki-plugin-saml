@@ -73,7 +73,12 @@ class Settings
                 // we send no NameIDPolicy, so ADFS may answer without a NameID. The
                 // plugin reads the user from an attribute, not from the NameID.
                 'wantNameId' => false,
-                'destinationStrictlyMatches' => false,
+                // the library builds the address of this wiki from our baseurl, so the
+                // Destination of a response has to match it exactly
+                'destinationStrictlyMatches' => true,
+                // the plugin decides about a response that answers an unknown request
+                // itself, with the allow_unsolicited setting
+                'rejectUnsolicitedResponsesWithInResponseTo' => false,
                 'allowRepeatAttributeName' => true,
             ],
 

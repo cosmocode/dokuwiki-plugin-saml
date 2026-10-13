@@ -13,13 +13,20 @@ class Session
     /**
      * The login that the session holds
      *
-     * @return array|null user and info, null when the session has no login for this browser
+     * A login that the identity provider ended is removed and not returned.
+     *
+     * @return array|null user and info, null when the session has no valid login for this browser
      */
     public function getLogin()
     {
         if (!isset($_SESSION[DOKU_COOKIE]['auth']['user'])) return null;
         if (!isset($_SESSION[DOKU_COOKIE]['auth']['buid'])) return null;
         if ($_SESSION[DOKU_COOKIE]['auth']['buid'] !== auth_browseruid()) return null;
+
+        if ($this->isExpired()) {
+            $this->clearLogin();
+            return null;
+        }
 
         return $_SESSION[DOKU_COOKIE]['auth'];
     }
@@ -39,34 +46,70 @@ class Session
     }
 
     /**
-     * The address that the user wanted before the login started
-     *
-     * @return string an empty string when the session has no address
-     */
-    public function getRedirect()
-    {
-        return $this->get('redirect', '');
-    }
-
-    /**
-     * Keep the address that the user wanted before the login started
-     *
-     * @param string $url
-     * @return void
-     */
-    public function setRedirect($url)
-    {
-        $this->set('redirect', $url);
-    }
-
-    /**
-     * Forget the address that the user wanted before the login started
+     * Forget the login
      *
      * @return void
      */
-    public function clearRedirect()
+    public function clearLogin()
     {
-        $this->set('redirect', null);
+        unset($_SESSION[DOKU_COOKIE]['auth']);
+        $this->set('expiry', null);
+    }
+
+    /**
+     * Did the identity provider end the login?
+     *
+     * An assertion may limit how long the login is valid. Without such a limit the login
+     * lasts as long as the session of the wiki.
+     *
+     * @return bool
+     */
+    protected function isExpired()
+    {
+        $expiry = (int)$this->get('expiry', 0);
+        return $expiry && $expiry <= time();
+    }
+
+    /**
+     * Keep the time at which the login of the identity provider ends
+     *
+     * @param int|null $time null when the assertion gives no time
+     * @return void
+     */
+    public function setExpiry($time)
+    {
+        $this->set('expiry', $time ? (int)$time : null);
+    }
+
+    /**
+     * The identifier of the request that this wiki sent to the identity provider
+     *
+     * @return string|null null when this wiki started no login
+     */
+    public function getRequestId()
+    {
+        return $this->get('requestid');
+    }
+
+    /**
+     * Keep the identifier of the request to the identity provider
+     *
+     * @param string $id
+     * @return void
+     */
+    public function setRequestId($id)
+    {
+        $this->set('requestid', $id);
+    }
+
+    /**
+     * Forget the identifier of the request to the identity provider
+     *
+     * @return void
+     */
+    public function clearRequestId()
+    {
+        $this->set('requestid', null);
     }
 
     /**
