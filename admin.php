@@ -3,6 +3,7 @@
 use dokuwiki\Extension\AdminPlugin;
 use dokuwiki\Form\Form;
 use dokuwiki\HTTP\DokuHTTPClient;
+use dokuwiki\plugin\saml\KeyStore;
 
 /**
  * SAML authentication plugin
@@ -19,6 +20,12 @@ class admin_plugin_saml extends AdminPlugin
     public function handle()
     {
         global $INPUT;
+
+        if ($INPUT->has('rotate')) {
+            $this->handleKey();
+            return;
+        }
+
         if ($INPUT->str('url')) {
             $http = new DokuHTTPClient();
             $xml = $http->get($INPUT->str('url'));
@@ -38,21 +45,78 @@ class admin_plugin_saml extends AdminPlugin
         echo $this->locale_xhtml('intro');
         echo $this->getForm()->toHTML();
 
-        if (!$this->xml) return;
+        if ($this->xml) {
+            $data = $this->metaData($this->xml);
+            if ($data === []) {
+                echo $this->locale_xhtml('notfound');
+            } else {
+                echo $this->locale_xhtml('found');
+                echo '<dl>';
+                foreach ($data as $key => $val) {
+                    echo '<dt>' . hsc($key) . '</dt>';
+                    echo '<dd><code>' . hsc($val) . '</code></dd>';
+                }
+                echo '</dl>';
+            }
+        }
 
-        $data = $this->metaData($this->xml);
-        if ($data === []) {
-            echo $this->locale_xhtml('notfound');
+        $this->htmlKey();
+    }
+
+    /**
+     * Create a new key pair for this wiki
+     *
+     * @return void
+     */
+    protected function handleKey()
+    {
+        global $INPUT;
+
+        if (!checkSecurityToken()) return;
+
+        if (!$INPUT->bool('confirm')) {
+            msg($this->getLang('key_needconfirm'), -1);
             return;
         }
 
-        echo $this->locale_xhtml('found');
-        echo '<dl>';
-        foreach ($data as $key => $val) {
-            echo '<dt>' . hsc($key) . '</dt>';
-            echo '<dd><code>' . hsc($val) . '</code></dd>';
+        try {
+            (new KeyStore())->rotate();
+            msg($this->getLang('key_new'), 1);
+        } catch (Exception $e) {
+            msg(hsc($e->getMessage()), -1);
         }
+    }
+
+    /**
+     * The certificate of this wiki and the buttons that manage it
+     *
+     * The private key stays in the wiki and is never shown.
+     *
+     * @return void
+     */
+    protected function htmlKey()
+    {
+        $keys = new KeyStore();
+
+        echo $this->locale_xhtml('key');
+
+        echo '<dl>';
+        echo '<dt>' . $this->getLang('key_metadata') . '</dt>';
+        $url = wl('', ['do' => 'saml'], true, '&');
+        echo '<dd><a href="' . hsc($url) . '">' . hsc($url) . '</a></dd>';
+        echo '<dt>' . $this->getLang('key_expiry') . '</dt>';
+        echo '<dd>' . hsc(dformat($keys->getExpiry())) . '</dd>';
         echo '</dl>';
+
+        echo '<pre class="code">' . hsc($keys->getCertificate()) . '</pre>';
+
+        $form = new Form();
+        $form->addFieldsetOpen($this->getLang('key_manage'));
+        $form->addCheckbox('confirm', $this->getLang('key_confirm'));
+        $form->addHTML('<br>');
+        $form->addButton('rotate', hsc($this->getLang('key_rotate')))->attr('type', 'submit');
+        $form->addFieldsetClose();
+        echo $form->toHTML();
     }
 
     /**

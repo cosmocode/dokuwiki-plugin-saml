@@ -1,0 +1,5 @@
+===== Key of this Wiki =====
+
+The wiki signs its messages with its own key and receives encrypted assertions for it. It created the key itself; the private key never leaves the wiki.
+
+Give the certificate below to your Identity Provider, or let it read the SP metadata of this wiki. A self-signed certificate is the standard here: the Identity Provider compares the certificate with the copy that it has.

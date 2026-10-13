@@ -65,7 +65,7 @@ class action_plugin_saml extends ActionPlugin
         $hlp = plugin_load('helper', 'saml');
 
         try {
-            $xml = $hlp->getSamlLib()->getSettings()->getSPMetadata();
+            $xml = $hlp->getMetadata();
         } catch (Exception $e) {
             http_status(500);
             echo hsc($e->getMessage());

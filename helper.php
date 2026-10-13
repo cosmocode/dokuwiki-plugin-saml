@@ -30,4 +30,20 @@ class helper_plugin_saml extends Plugin
         }
         return $this->saml;
     }
+
+    /**
+     * The SP metadata that describes this wiki to the identity provider
+     *
+     * @return string the metadata in XML
+     * @throws Exception when the configuration is not valid
+     */
+    public function getMetadata()
+    {
+        return $this->getSamlLib()->getSettings()->getSPMetadata(
+            true, // publish the certificate for encryption as well
+            null, // validUntil: not used, see the next parameter
+            null, // cacheDuration: the default of one week
+            true // no validUntil: an admin may upload this file by hand once
+        );
+    }
 }

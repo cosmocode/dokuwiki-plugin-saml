@@ -3,6 +3,8 @@
 namespace dokuwiki\plugin\saml;
 
 use OneLogin\Saml2\Constants;
+use RobRichards\XMLSecLibs\XMLSecurityDSig;
+use RobRichards\XMLSecLibs\XMLSecurityKey;
 
 /**
  * The settings of the php-saml library
@@ -14,12 +16,17 @@ class Settings
     /** @var array the configuration of the plugin */
     protected $conf;
 
+    /** @var KeyStore the key pair of this wiki */
+    protected $keys;
+
     /**
      * @param array $conf the configuration of the plugin
+     * @param KeyStore|null $keys the key pair of this wiki, the standard store by default
      */
-    public function __construct(array $conf)
+    public function __construct(array $conf, ?KeyStore $keys = null)
     {
         $this->conf = $conf;
+        $this->keys = $keys ?: new KeyStore();
     }
 
     /**
@@ -49,6 +56,8 @@ class Settings
                     'binding' => Constants::BINDING_HTTP_REDIRECT,
                 ],
                 'NameIDFormat' => Constants::NAMEID_EMAIL_ADDRESS,
+                'privateKey' => $this->keys->getKey(),
+                'x509cert' => $this->keys->getCertificate(),
             ],
 
             // The SAML server we talk to
@@ -67,6 +76,13 @@ class Settings
             ],
 
             'security' => [
+                // the metadata of this wiki carries our signature, so an identity
+                // provider that reads it knows that it is ours
+                'signMetadata' => true,
+                // every identity provider understands SHA-256, a stronger hash brings
+                // nothing here and not all of them support it
+                'signatureAlgorithm' => XMLSecurityKey::RSA_SHA256,
+                'digestAlgorithm' => XMLSecurityDSig::SHA256,
                 // ADFS with Windows Integrated Authentication answers with another
                 // context class and refuses a request that demands one
                 'requestedAuthnContext' => false,
