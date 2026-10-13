@@ -2,10 +2,14 @@
 
 namespace dokuwiki\plugin\saml\test;
 
+use DOMDocument;
 use dokuwiki\plugin\saml\Settings;
 use DokuWikiTest;
 use OneLogin\Saml2\Auth;
+use OneLogin\Saml2\Constants;
 use OneLogin\Saml2\Utils;
+use RobRichards\XMLSecLibs\XMLSecEnc;
+use RobRichards\XMLSecLibs\XMLSecurityKey;
 
 /**
  * Base for the tests that send a SAML message to the library
@@ -34,6 +38,25 @@ abstract class AbstractMessageTest extends DokuWikiTest
         $_SERVER['REQUEST_URI'] = '/' . DOKU_SCRIPT;
         unset($_SERVER['QUERY_STRING']);
         $_POST = [];
+
+        self::seedServiceProviderKey();
+    }
+
+    /**
+     * Put the key pair of the test service provider in place
+     *
+     * The key store creates a key pair when it finds none. That takes a moment, so the
+     * tests use a key of their own.
+     *
+     * @return void
+     */
+    public static function seedServiceProviderKey()
+    {
+        global $conf;
+        io_mkdir_p($conf['metadir']);
+        foreach (['.key', '.crt'] as $suffix) {
+            copy(__DIR__ . '/data/_saml' . $suffix, $conf['metadir'] . '/_saml' . $suffix);
+        }
     }
 
     /** @inheritdoc */
@@ -73,6 +96,9 @@ abstract class AbstractMessageTest extends DokuWikiTest
             'auto_login' => 'never',
             'use_slo' => 0,
             'allow_unsolicited' => 1,
+            'sign_requests' => 0,
+            'want_assertions_signed' => 0,
+            'want_encrypted' => 0,
             'userid_attr_name' => 'login',
             'fullname_attr_name' => 'fullname',
             'email_attr_name' => 'email',
@@ -96,7 +122,7 @@ abstract class AbstractMessageTest extends DokuWikiTest
      *
      * @param array $options destination, audience, issuer, inResponseTo, assertionId,
      *                       notBefore, notOnOrAfter, confirmationExpiry, sessionExpiry,
-     *                       sign, signer, attributes
+     *                       sign, signer, encrypt, attributes
      * @return string the message, base64 encoded as the HTTP POST binding wants it
      */
     protected function getResponse($options = [])
@@ -113,6 +139,7 @@ abstract class AbstractMessageTest extends DokuWikiTest
             'sessionExpiry' => time() + 3600,
             'sign' => true,
             'signer' => 'idp',
+            'encrypt' => false,
             'attributes' => [
                 'login' => ['andi'],
                 'fullname' => ['Andreas Gohr'],
@@ -122,6 +149,9 @@ abstract class AbstractMessageTest extends DokuWikiTest
         ], $options);
 
         $xml = $this->buildResponse($options);
+        if ($options['encrypt']) {
+            $xml = $this->encryptAssertion($xml);
+        }
         if ($options['sign']) {
             $xml = Utils::addSign(
                 $xml,
@@ -131,6 +161,42 @@ abstract class AbstractMessageTest extends DokuWikiTest
         }
 
         return base64_encode($xml);
+    }
+
+    /**
+     * Encrypt the assertion of a response for the certificate of this wiki
+     *
+     * The assertion gets a session key, and that key gets the public key of the wiki.
+     * Only the wiki can read the assertion afterwards.
+     *
+     * @param string $xml the response with a plain assertion
+     * @return string the response with an EncryptedAssertion
+     */
+    protected function encryptAssertion($xml)
+    {
+        global $conf;
+
+        $doc = new DOMDocument();
+        $doc->loadXML($xml);
+        $assertion = $doc->getElementsByTagNameNS(Constants::NS_SAML, 'Assertion')->item(0);
+
+        $sessionKey = new XMLSecurityKey(XMLSecurityKey::AES128_CBC);
+        $sessionKey->generateSessionKey();
+
+        $wikiKey = new XMLSecurityKey(XMLSecurityKey::RSA_OAEP_MGF1P, ['type' => 'public']);
+        $wikiKey->loadKey(io_readFile($conf['metadir'] . '/_saml.crt', false), false, true);
+
+        $enc = new XMLSecEnc();
+        $enc->setNode($assertion);
+        $enc->type = XMLSecEnc::Element;
+        $enc->encryptKey($wikiKey, $sessionKey);
+        $encrypted = $enc->encryptNode($sessionKey);
+
+        $wrapper = $doc->createElementNS(Constants::NS_SAML, 'saml:EncryptedAssertion');
+        $encrypted->parentNode->replaceChild($wrapper, $encrypted);
+        $wrapper->appendChild($encrypted);
+
+        return $doc->saveXML();
     }
 
     /**
@@ -171,7 +237,9 @@ abstract class AbstractMessageTest extends DokuWikiTest
             ' Destination="' . hsc($options['destination']) . '"' . $inResponseTo . '>' .
             '<saml:Issuer>' . hsc($options['issuer']) . '</saml:Issuer>' .
             '<samlp:Status><samlp:StatusCode Value="urn:oasis:names:tc:SAML:2.0:status:Success"/></samlp:Status>' .
-            '<saml:Assertion ID="' . hsc($options['assertionId']) . '" Version="2.0"' .
+            // the namespace is declared here as well, an assertion may travel encrypted
+            '<saml:Assertion xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion"' .
+            ' ID="' . hsc($options['assertionId']) . '" Version="2.0"' .
             ' IssueInstant="' . $time(time()) . '">' .
             '<saml:Issuer>' . hsc($options['issuer']) . '</saml:Issuer>' .
             '<saml:Subject>' .

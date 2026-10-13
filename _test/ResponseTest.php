@@ -60,6 +60,48 @@ class ResponseTest extends AbstractMessageTest
     }
 
     /**
+     * An assertion that only this wiki can read is accepted
+     */
+    public function testEncryptedAssertion()
+    {
+        $saml = $this->getLib(['want_encrypted' => 1]);
+        $_POST['SAMLResponse'] = $this->getResponse(['encrypt' => true]);
+
+        $saml->processResponse();
+
+        $this->assertTrue($saml->isAuthenticated(), $saml->getLastErrorReason() ?? '');
+        $this->assertEquals(['andi'], $saml->getAttribute('login'));
+    }
+
+    /**
+     * A plain assertion is refused when the wiki demands encryption
+     */
+    public function testUnencryptedAssertion()
+    {
+        $saml = $this->getLib(['want_encrypted' => 1]);
+        $_POST['SAMLResponse'] = $this->getResponse();
+
+        $saml->processResponse();
+
+        $this->assertFalse($saml->isAuthenticated());
+        $this->assertStringContainsString('not encrypted', $saml->getLastErrorReason());
+    }
+
+    /**
+     * An assertion without a signature of its own is refused when the wiki demands one
+     */
+    public function testUnsignedAssertion()
+    {
+        $saml = $this->getLib(['want_assertions_signed' => 1]);
+        $_POST['SAMLResponse'] = $this->getResponse();
+
+        $saml->processResponse();
+
+        $this->assertFalse($saml->isAuthenticated());
+        $this->assertStringContainsString('not signed', $saml->getLastErrorReason());
+    }
+
+    /**
      * A response without a signature is refused
      */
     public function testNoSignature()

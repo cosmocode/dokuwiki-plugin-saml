@@ -5,6 +5,8 @@ namespace dokuwiki\plugin\saml\test;
 use dokuwiki\plugin\saml\Settings;
 use DokuWikiTest;
 use OneLogin\Saml2\Auth;
+use RobRichards\XMLSecLibs\XMLSecurityDSig;
+use RobRichards\XMLSecLibs\XMLSecurityKey;
 
 /**
  * Tests for the settings of the php-saml library
@@ -16,6 +18,13 @@ class SettingsTest extends DokuWikiTest
 {
     /** @inheritdoc */
     protected $pluginsEnabled = ['saml'];
+
+    /** @inheritdoc */
+    public function setUp(): void
+    {
+        parent::setUp();
+        AbstractMessageTest::seedServiceProviderKey();
+    }
 
     /** @var string the base64 part of a certificate, longer than one line */
     protected const CERTBODY = 'MIIBCgKCAQEAwJ6Z3Z6Z3Z6Z3Z6Z3Z6Z3Z6Z3Z6Z3Z6Z3Z6Z3Z6Z3Z6Z3Z6Z3Z6Z3Z6Z3Z6Z3Z6Z3Z6Z3Z6Z';
@@ -37,6 +46,10 @@ class SettingsTest extends DokuWikiTest
             'autoprovisioning' => 1,
             'auto_login' => 'never',
             'use_slo' => 0,
+            'allow_unsolicited' => 1,
+            'sign_requests' => 0,
+            'want_assertions_signed' => 0,
+            'want_encrypted' => 0,
             'userid_attr_name' => 'login',
             'fullname_attr_name' => 'fullname',
             'email_attr_name' => 'email',
@@ -119,6 +132,64 @@ class SettingsTest extends DokuWikiTest
         $this->assertTrue($settings['security']['destinationStrictlyMatches']);
         $this->assertFalse($settings['security']['rejectUnsolicitedResponsesWithInResponseTo']);
         $this->assertFalse($settings['security']['requestedAuthnContext']);
+    }
+
+    /**
+     * The wiki signs with SHA-256
+     */
+    public function testSignatureAlgorithm()
+    {
+        $settings = (new Settings($this->getConf()))->toArray();
+
+        $this->assertEquals(XMLSecurityKey::RSA_SHA256, $settings['security']['signatureAlgorithm']);
+        $this->assertEquals(XMLSecurityDSig::SHA256, $settings['security']['digestAlgorithm']);
+    }
+
+    /**
+     * The wiki publishes one certificate only, the one whose key it has
+     */
+    public function testOneCertificate()
+    {
+        $settings = (new Settings($this->getConf()))->toArray();
+
+        $this->assertArrayNotHasKey('x509certNew', $settings['sp']);
+    }
+
+    /**
+     * The key pair of the wiki is part of the settings, the key is never public
+     */
+    public function testKeyPair()
+    {
+        $settings = (new Settings($this->getConf()))->toArray();
+
+        $this->assertStringContainsString('PRIVATE KEY', $settings['sp']['privateKey']);
+        $this->assertStringContainsString('BEGIN CERTIFICATE', $settings['sp']['x509cert']);
+        $this->assertTrue(openssl_x509_check_private_key($settings['sp']['x509cert'], $settings['sp']['privateKey']));
+    }
+
+    /**
+     * The wiki signs its request only when the admin asks for it
+     */
+    public function testSignedRequest()
+    {
+        $auth = new Auth((new Settings($this->getConf(['sign_requests' => 1])))->toArray());
+        $url = $auth->login(null, [], false, false, true, false);
+        parse_str((string)parse_url($url, PHP_URL_QUERY), $query);
+
+        $this->assertArrayHasKey('Signature', $query);
+        $this->assertEquals(XMLSecurityKey::RSA_SHA256, $query['SigAlg']);
+    }
+
+    /**
+     * Without the setting the request carries no signature
+     */
+    public function testUnsignedRequest()
+    {
+        $auth = new Auth((new Settings($this->getConf()))->toArray());
+        $url = $auth->login(null, [], false, false, true, false);
+        parse_str((string)parse_url($url, PHP_URL_QUERY), $query);
+
+        $this->assertArrayNotHasKey('Signature', $query);
     }
 
     /**
