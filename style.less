@@ -1,0 +1,43 @@
+/**
+ * Styles of the SAML configuration helper
+ *
+ * The rules hang on an identifier so they outrank the selectors of the template.
+ */
+
+#saml__admin {
+
+    form,
+    table.inline {
+        width: 100%;
+    }
+
+    // the core gives a fieldset 400px and centres it, which suits a login form
+    fieldset {
+        width: auto;
+        margin: 0 0 1.4em;
+        text-align: left;
+        padding: 1em;
+    }
+
+    input[type="text"],
+    textarea {
+        width: 100%;
+        box-sizing: border-box;
+    }
+
+    label {
+        display: block;
+        margin-bottom: 1em;
+    }
+
+    table.inline td {
+        vertical-align: top;
+    }
+
+    // a certificate keeps its line breaks and wraps what is still too wide for a cell
+    table.inline pre.code {
+        margin: 0;
+        white-space: pre-wrap;
+        word-break: break-all;
+    }
+}
