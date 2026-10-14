@@ -402,13 +402,19 @@ class admin_plugin_saml extends AdminPlugin
     /**
      * The button that creates a new key pair for this wiki
      *
+     * The identity provider needs the certificate of the wiki only to check a signed
+     * message and to encrypt an assertion, so the warning of the form names a broken
+     * login for these two settings alone.
+     *
      * @return void
      */
     protected function htmlRotateForm()
     {
+        $inUse = $this->getConf('sign_requests') || $this->getConf('want_encrypted');
+
         $form = new Form();
         $form->addFieldsetOpen($this->getLang('key_manage'));
-        $form->addCheckbox('confirm', $this->getLang('key_confirm'));
+        $form->addCheckbox('confirm', $this->getLang($inUse ? 'key_confirm' : 'key_confirm_unused'));
         $form->addHTML('<br>');
         $form->addButton('rotate', hsc($this->getLang('key_rotate')))->attr('type', 'submit');
         $form->addFieldsetClose();
