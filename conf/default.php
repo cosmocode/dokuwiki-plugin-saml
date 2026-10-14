@@ -13,7 +13,6 @@ $conf['autoprovisioning'] = 1;
 $conf['use_slo'] = 0;
 $conf["auto_login"] = "never";
 $conf['sign_requests'] = 0;
-$conf['want_assertions_signed'] = 0;
 $conf['want_encrypted'] = 0;
 $conf['userid_attr_name'] = 'login uid eduPersonPrincipalName';
 $conf['fullname_attr_name'] = 'fullname displayName';

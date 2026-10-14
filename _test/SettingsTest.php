@@ -60,7 +60,6 @@ class SettingsTest extends DokuWikiTest
             'auto_login' => 'never',
             'use_slo' => 0,
             'sign_requests' => 0,
-            'want_assertions_signed' => 0,
             'want_encrypted' => 0,
             'userid_attr_name' => 'login',
             'fullname_attr_name' => 'fullname',

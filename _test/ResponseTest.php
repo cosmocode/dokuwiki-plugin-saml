@@ -88,20 +88,6 @@ class ResponseTest extends AbstractMessageTest
     }
 
     /**
-     * An assertion without a signature of its own is refused when the wiki demands one
-     */
-    public function testUnsignedAssertion()
-    {
-        $saml = $this->getLib(['want_assertions_signed' => 1]);
-        $_POST['SAMLResponse'] = $this->getResponse();
-
-        $saml->processResponse();
-
-        $this->assertFalse($saml->isAuthenticated());
-        $this->assertStringContainsString('not signed', $saml->getLastErrorReason());
-    }
-
-    /**
      * A response without a signature is refused
      */
     public function testNoSignature()

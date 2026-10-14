@@ -13,7 +13,6 @@ $meta['autoprovisioning'] = array('onoff');
 $meta['use_slo']   = array('onoff');
 $meta["auto_login"] = array('multichoice','_choices' => array('never','after login','always'));
 $meta['sign_requests'] = array('onoff');
-$meta['want_assertions_signed'] = array('onoff');
 $meta['want_encrypted'] = array('onoff');
 $meta['userid_attr_name'] = array('string');
 $meta['fullname_attr_name'] = array('string');

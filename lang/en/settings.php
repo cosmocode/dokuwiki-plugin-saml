@@ -13,7 +13,6 @@ $lang['autoprovisioning'] = 'Create a user in the wiki at the first login? Other
 $lang['use_slo'] = 'Send the user to the IdP for a Single Logout at logout? Most IdP support this poorly, if at all.';
 $lang['auto_login'] = 'When to log the user in automatically? <code>never</code> does not; <code>after login</code> does for a user who did not log out; <code>always</code> does for everybody.';
 $lang['sign_requests'] = 'Sign the messages that the wiki sends to the IdP? The IdP needs the certificate of the wiki for this. Use the <a href="?do=admin&amp;page=saml">SAML Configuration Helper</a> to set this.';
-$lang['want_assertions_signed'] = 'Require a signature of the assertion itself? The wiki always refuses a response without any signature. Keycloak signs the response by default, ADFS signs the assertion.';
 $lang['want_encrypted'] = 'Require an encrypted assertion? <code>RSA-OAEP-MGF1P</code> is the only supported key transport.';
 $lang['userid_attr_name'] = 'User login name attribute. With several names, separated by spaces, the first attribute with a value counts.';
 $lang['fullname_attr_name'] = 'Full name attribute. With several names, separated by spaces, the values are joined by a space.';
