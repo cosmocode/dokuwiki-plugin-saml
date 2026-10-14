@@ -13,7 +13,7 @@ class Session
     /**
      * The login that the session holds
      *
-     * A login that the identity provider ended is removed and not returned.
+     * A login that expired is removed and not returned.
      *
      * @return array|null user and info, null when the session has no valid login for this browser
      */
@@ -54,6 +54,37 @@ class Session
     {
         unset($_SESSION[DOKU_COOKIE]['auth']);
         $this->set('expiry', null);
+        $this->set('idpsession', null);
+    }
+
+    /**
+     * The session of the user at the identity provider
+     *
+     * @return array nameid, format, namequalifier, spnamequalifier and sessionindex,
+     *               all empty when the session holds no SAML login
+     */
+    public function getIdpSession()
+    {
+        return array_merge([
+            'nameid' => '',
+            'format' => '',
+            'namequalifier' => '',
+            'spnamequalifier' => '',
+            'sessionindex' => '',
+        ], (array)$this->get('idpsession', []));
+    }
+
+    /**
+     * Keep the session of the user at the identity provider
+     *
+     * Single Logout names a session with these values.
+     *
+     * @param array $data nameid, format, namequalifier, spnamequalifier and sessionindex
+     * @return void
+     */
+    public function setIdpSession(array $data)
+    {
+        $this->set('idpsession', $data);
     }
 
     /**
@@ -66,8 +97,18 @@ class Session
      */
     protected function isExpired()
     {
-        $expiry = (int)$this->get('expiry', 0);
+        $expiry = $this->getExpiry();
         return $expiry && $expiry <= time();
+    }
+
+    /**
+     * The time at which the login of the identity provider ends
+     *
+     * @return int a timestamp, 0 when the assertion gave no time
+     */
+    public function getExpiry()
+    {
+        return (int)$this->get('expiry', 0);
     }
 
     /**

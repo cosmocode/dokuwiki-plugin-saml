@@ -52,7 +52,7 @@ class Settings
                     'binding' => Constants::BINDING_HTTP_POST,
                 ],
                 'singleLogoutService' => [
-                    'url' => wl('', ['do' => 'logout'], true, '&'),
+                    'url' => DOKU_URL . DOKU_SCRIPT . '?do=saml_sls',
                     'binding' => Constants::BINDING_HTTP_REDIRECT,
                 ],
                 'NameIDFormat' => Constants::NAMEID_EMAIL_ADDRESS,
@@ -79,8 +79,7 @@ class Settings
                 'authnRequestsSigned' => (bool)$this->conf['sign_requests'],
                 'logoutRequestSigned' => (bool)$this->conf['sign_requests'],
                 'logoutResponseSigned' => (bool)$this->conf['sign_requests'],
-                // the metadata of this wiki carries our signature, so an identity
-                // provider that reads it knows that it is ours
+                // the SP metadata is signed with the key of the wiki
                 'signMetadata' => true,
                 // the library refuses a response without any signature in every case.
                 // This demands a signature of the assertion itself.
@@ -113,6 +112,26 @@ class Settings
                 ],
             ],
         ];
+    }
+
+    /**
+     * The settings for a logout message of the identity provider
+     *
+     * @return array
+     */
+    public function forLogout()
+    {
+        $settings = $this->toArray();
+
+        // the library removes the query string before it compares the Destination, and
+        // only the SLS address of this wiki has one
+        $settings['security']['destinationStrictlyMatches'] = false;
+
+        // everybody can send a logout message to the SLS address, so it must be signed
+        // by the identity provider
+        $settings['security']['wantMessagesSigned'] = true;
+
+        return $settings;
     }
 
     /**

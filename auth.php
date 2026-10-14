@@ -25,6 +25,9 @@ class auth_plugin_saml extends auth_plugin_authplain
     /** @var ReplayCache the assertions that were used already */
     protected $replay;
 
+    /** @var helper_plugin_saml the services of this plugin */
+    protected $hlp;
+
     /** @inheritdoc */
     public function __construct()
     {
@@ -46,9 +49,8 @@ class auth_plugin_saml extends auth_plugin_authplain
         $this->session = new Session();
         $this->replay = new ReplayCache();
 
-        /** @var helper_plugin_saml $hlp */
-        $hlp = plugin_load('helper', 'saml');
-        $this->saml = $hlp->getSamlLib();
+        $this->hlp = plugin_load('helper', 'saml');
+        $this->saml = $this->hlp->getSamlLib();
     }
 
     /**
@@ -86,34 +88,40 @@ class auth_plugin_saml extends auth_plugin_authplain
         return false;
     }
 
-    /** @inheritdoc */
+    /**
+     * Tell the identity provider that this user logged out
+     *
+     * The core calls this at the end of auth_logoff(), which already ended the session of
+     * the wiki.
+     *
+     * @inheritdoc
+     */
     public function logOff()
     {
         global $ID;
-        global $INPUT;
 
         set_doku_pref('saml_autologin', 0);
 
-        /* By default, try to return the user to the page they were just viewing */
-        $redirTo = wl($ID, '', true, '&');
+        if (!$this->getConf('use_slo')) return;
+        if (!$this->getConf('slo_endpoint')) return;
 
-        if ($INPUT->get->has('SAMLResponse') || $INPUT->get->has('SAMLRequest')) {
-            /* Process a logout request or response of the identity provider */
-            $this->saml->processSLO();
-            $errors = $this->saml->getErrors();
-            if ($errors) {
-                msg('SAML SLO: ' . hsc(implode(', ', $errors) . '; ' . $this->saml->getLastErrorReason()), -1);
-            }
+        $saml = $this->session->getIdpSession();
+        if ($saml['nameid'] === '') return; // no SAML session to end
 
-            /* The RelayState holds the page that the user wanted */
-            $redirTo = $this->getTarget($INPUT->get->str('RelayState'));
-        } elseif ($this->getConf('use_slo')) {
-            /* The user started the logout in the wiki itself */
-            $this->saml->logout($ID); // returnTo: comes back as the RelayState
-        }
+        $this->session->clearLogin();
 
-        /* Manually redirect the user if we ever get here */
-        send_redirect($redirTo);
+        $url = $this->saml->logout(
+            $ID, // returnTo: the identity provider sends this page back as the RelayState
+            [], // parameters: none
+            $saml['nameid'],
+            $saml['sessionindex'],
+            true, // stay: the redirect happens below
+            $saml['format'],
+            $saml['namequalifier'],
+            $saml['spnamequalifier']
+        );
+        $this->session->setRequestId($this->saml->getLastRequestID()); // the answer names it
+        send_redirect($url);
     }
 
     /** @inheritdoc */
@@ -191,37 +199,21 @@ class auth_plugin_saml extends auth_plugin_authplain
             $this->setCurrentUser($userinfo);
             $this->session->setLogin($userinfo['user'], $userinfo);
             $this->session->setExpiry($this->saml->getSessionExpiration());
+            $this->session->setIdpSession([
+                'nameid' => (string)$this->saml->getNameId(),
+                'format' => (string)$this->saml->getNameIdFormat(),
+                'namequalifier' => (string)$this->saml->getNameIdNameQualifier(),
+                'spnamequalifier' => (string)$this->saml->getNameIdSPNameQualifier(),
+                'sessionindex' => (string)$this->saml->getSessionIndex(),
+            ]);
             set_doku_pref('saml_autologin', 1);
 
-            // successful login, the RelayState holds the page that the user wanted
-            send_redirect($this->getTarget($INPUT->post->str('RelayState'))); // not the POST
+            // the redirect keeps the POST out of the history of the browser
+            send_redirect($this->hlp->getTargetPage());
             return true;
         } catch (Exception $e) {
             return $this->abortLogin('Invalid SAML response: ' . hsc($e->getMessage()));
         }
-    }
-
-    /**
-     * The address of the page that a RelayState names
-     *
-     * The identity provider sends the RelayState of our message back, which holds the ID
-     * of the page that the user wanted. The session cannot hold that page, because the
-     * browser does not send the session cookie with a cross site POST. The wiki builds
-     * the address itself, so a RelayState of somebody else cannot send the user to
-     * another site.
-     *
-     * @param string $relay the RelayState of the message
-     * @return string the address of the page, the current page when the RelayState
-     *                holds no page ID of this wiki
-     */
-    protected function getTarget($relay)
-    {
-        global $ID;
-
-        $page = cleanID((string)$relay);
-        if ($page === '' || $page !== $relay) $page = $ID;
-
-        return wl($page, '', true, '&');
     }
 
     /**

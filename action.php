@@ -22,12 +22,11 @@ class action_plugin_saml extends ActionPlugin
     }
 
     /**
-     * Log the user out when the identity provider asks for it
+     * The Single Logout Service of this wiki
      *
-     * The core logout action refuses a request without a security token, which a message
-     * of the identity provider does not have. The logout runs here instead. auth_logoff()
-     * ends the local session and then calls the logOff() of the plugin, which answers the
-     * identity provider.
+     * A LogoutRequest arrives when a logout started somewhere else, a LogoutResponse when
+     * the identity provider answers a logout that started in this wiki. Both come with
+     * the Redirect binding, which the SP metadata announces.
      *
      * @param Event $event
      * @param mixed $param
@@ -35,17 +34,31 @@ class action_plugin_saml extends ActionPlugin
      */
     public function handleLogoutMessage(Event $event, $param)
     {
-        global $auth;
         global $INPUT;
 
-        if (!$auth instanceof auth_plugin_saml) return;
-        if (act_clean($event->data) != 'logout') return;
-        if (!$this->getConf('use_slo')) return;
-        if (!$INPUT->get->has('SAMLResponse') && !$INPUT->get->has('SAMLRequest')) return;
-
+        if (act_clean($event->data) != 'saml_sls') return;
         $event->preventDefault();
         $event->stopPropagation();
-        auth_logoff();
+
+        /** @var helper_plugin_saml $hlp */
+        $hlp = plugin_load('helper', 'saml');
+
+        try {
+            if ($INPUT->get->has('SAMLRequest')) {
+                // the handler answers the identity provider itself
+                $hlp->getLogoutHandler()->handleRequest($INPUT->get->str('SAMLRequest'));
+            } elseif ($INPUT->get->has('SAMLResponse')) {
+                $hlp->getLogoutHandler()->handleResponse($INPUT->get->str('SAMLResponse'));
+                send_redirect($hlp->getTargetPage());
+            } else {
+                http_status(400);
+                echo 'No SAML logout message found';
+            }
+        } catch (Exception $e) {
+            http_status(400);
+            echo hsc($e->getMessage());
+        }
+        exit();
     }
 
     /**
