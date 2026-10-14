@@ -39,14 +39,18 @@ class UserMapperTest extends DokuWikiTest
     /**
      * A processed response with the given attributes
      *
-     * @param array $attributes attribute name to values
+     * @param array $attributes Name to values
+     * @param array $friendly FriendlyName to values
      * @return Auth
      */
-    protected function getLib($attributes)
+    protected function getLib($attributes, $friendly = [])
     {
         $saml = $this->createMock(Auth::class);
         $saml->method('getAttribute')->willReturnCallback(
             static fn($name) => $attributes[$name] ?? null
+        );
+        $saml->method('getAttributeWithFriendlyName')->willReturnCallback(
+            static fn($name) => $friendly[$name] ?? null
         );
         return $saml;
     }
@@ -164,6 +168,114 @@ class UserMapperTest extends DokuWikiTest
         $this->assertEquals('andi', $userdata['user']);
         $this->assertEquals('', $userdata['name']);
         $this->assertEquals('', $userdata['mail']);
+    }
+
+    /**
+     * An attribute that the Name does not give is taken from the FriendlyName
+     */
+    public function testFriendlyNameFallback()
+    {
+        global $conf;
+        $mapper = new UserMapper($this->getConf());
+        $response = $this->getLib(
+            ['urn:oid:0.9.2342.19200300.100.1.1' => ['Andi']],
+            [
+                'login' => ['Someone Else'],
+                'fullname' => ['Andreas Gohr'],
+                'email' => ['andi@example.org'],
+                'groups' => ['Admins'],
+            ]
+        );
+
+        $userdata = $mapper->getUserData($response);
+
+        $this->assertEquals('someone else', $userdata['user']);
+        $this->assertEquals('Andreas Gohr', $userdata['name']);
+        $this->assertEquals('andi@example.org', $userdata['mail']);
+        $this->assertEquals(['admins', $conf['defaultgroup']], $userdata['grps']);
+    }
+
+    /**
+     * The Name of an attribute counts before the FriendlyName
+     */
+    public function testNamePreferredOverFriendlyName()
+    {
+        $mapper = new UserMapper($this->getConf());
+        $response = $this->getLib(
+            [
+                'login' => ['Andi'],
+                'fullname' => ['Andreas Gohr'],
+                'email' => ['andi@example.org'],
+            ],
+            ['login' => ['Someone Else']]
+        );
+
+        $userdata = $mapper->getUserData($response);
+
+        $this->assertEquals('andi', $userdata['user']);
+    }
+
+    /**
+     * The first configured attribute with a value gives the login name and the mail
+     */
+    public function testSeveralNamesFirstValue()
+    {
+        $mapper = new UserMapper($this->getConf([
+            'userid_attr_name' => 'uid login',
+            'email_attr_name' => 'mail email',
+        ]));
+        $response = $this->getLib([
+            'login' => ['Andi'],
+            'fullname' => ['Andreas Gohr'],
+            'email' => ['andi@example.org'],
+        ]);
+
+        $userdata = $mapper->getUserData($response);
+
+        $this->assertEquals('andi', $userdata['user']);
+        $this->assertEquals('andi@example.org', $userdata['mail']);
+    }
+
+    /**
+     * An attribute without a value does not win over the next one
+     */
+    public function testSeveralNamesEmptyValue()
+    {
+        $mapper = new UserMapper($this->getConf(['userid_attr_name' => 'uid login']));
+
+        $userdata = $mapper->getUserData($this->getResponse(['uid' => ['']]));
+
+        $this->assertEquals('andi', $userdata['user']);
+    }
+
+    /**
+     * The full name joins the values of all configured attributes
+     */
+    public function testSeveralNamesJoined()
+    {
+        $mapper = new UserMapper($this->getConf(['fullname_attr_name' => 'givenName sn']));
+        $response = $this->getResponse(['givenName' => ['Andreas'], 'sn' => ['Gohr']]);
+
+        $userdata = $mapper->getUserData($response);
+
+        $this->assertEquals('Andreas Gohr', $userdata['name']);
+    }
+
+    /**
+     * The groups collect the values of all configured attributes once
+     */
+    public function testSeveralNamesCollected()
+    {
+        global $conf;
+        $mapper = new UserMapper($this->getConf(['groups_attr_name' => 'groups ou']));
+        $response = $this->getResponse([
+            'groups' => ['Admins', 'Users'],
+            'ou' => ['Users', 'Staff'],
+        ]);
+
+        $userdata = $mapper->getUserData($response);
+
+        $this->assertEquals(['admins', 'users', 'staff', $conf['defaultgroup']], $userdata['grps']);
     }
 
     /**

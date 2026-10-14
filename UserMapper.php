@@ -31,6 +31,10 @@ class UserMapper
      * Reads the login name only when the plugin does not provision users. The wiki then
      * takes the other data from the local user database.
      *
+     * The login name and the mail address take the first value that the configured
+     * attributes give, the full name joins all of them and the groups collect all of
+     * them.
+     *
      * @param Auth $saml the library with a processed response
      * @return array user, name, mail and grps
      * @throws Exception when a required attribute is missing
@@ -42,23 +46,23 @@ class UserMapper
         $userdata = ['user' => '', 'name' => '', 'mail' => '', 'grps' => []];
 
         $userdata['user'] = $this->cleanUser(
-            $this->getAttribute($saml, $this->conf['userid_attr_name'])[0]
+            $this->getAttributes($saml, $this->conf['userid_attr_name'])[0]
         );
 
         if ($this->conf['autoprovisioning']) {
             // the login name is the fallback for the full name
             $nameattr = $this->conf['fullname_attr_name'] ?: $this->conf['userid_attr_name'];
-            $userdata['name'] = $this->getAttribute($saml, $nameattr)[0];
-            $userdata['mail'] = $this->getAttribute($saml, $this->conf['email_attr_name'])[0];
+            $userdata['name'] = implode(' ', $this->getAttributes($saml, $nameattr));
+            $userdata['mail'] = $this->getAttributes($saml, $this->conf['email_attr_name'])[0];
 
             // groups are optional, a user without any group is permitted
             if ($this->conf['groups_attr_name']) {
-                $userdata['grps'] = $this->getAttribute($saml, $this->conf['groups_attr_name'], false);
+                $userdata['grps'] = $this->getAttributes($saml, $this->conf['groups_attr_name'], false);
             }
         }
 
         $userdata['grps'][] = $conf['defaultgroup'];
-        $userdata['grps'] = array_map($this->cleanGroup(...), $userdata['grps']);
+        $userdata['grps'] = array_values(array_unique(array_map($this->cleanGroup(...), $userdata['grps'])));
 
         return $userdata;
     }
@@ -99,20 +103,49 @@ class UserMapper
     }
 
     /**
-     * One attribute of the assertion
+     * The values that one or more attributes of the assertion give
+     *
+     * The values keep the order of the configured names, so the first one belongs to
+     * the first attribute that has a value.
      *
      * @param Auth $saml the library with a processed response
-     * @param string $name the name of the attribute
-     * @param bool $required throw when the attribute is missing
-     * @return array the values of the attribute, at least one when required
+     * @param string $names one or more attribute names, separated by spaces
+     * @param bool $required throw when no attribute has a value
+     * @return array the values, at least one when required
      * @throws Exception when a required attribute is missing
      */
-    protected function getAttribute(Auth $saml, $name, $required = true)
+    protected function getAttributes(Auth $saml, $names, $required = true)
     {
-        $values = (array)$saml->getAttribute($name);
+        $values = [];
+        foreach (preg_split('/\s+/', trim($names), -1, PREG_SPLIT_NO_EMPTY) as $name) {
+            $values = array_merge($values, $this->getAttribute($saml, $name));
+        }
+
         if ($required && $values === []) {
-            throw new Exception('SAML Response is missing attribute ' . $name);
+            throw new Exception('SAML Response is missing attribute ' . $names);
         }
         return $values;
+    }
+
+    /**
+     * The values of one attribute of the assertion
+     *
+     * The Name of an attribute counts first. An identity provider that gives the full
+     * Name as a URN names the attribute a second time with a short FriendlyName, which
+     * the administrator can configure instead.
+     *
+     * @param Auth $saml the library with a processed response
+     * @param string $name the Name or the FriendlyName of the attribute
+     * @return array the values of the attribute, empty when the response has none
+     */
+    protected function getAttribute(Auth $saml, $name)
+    {
+        $values = (array)$saml->getAttribute($name);
+        if ($values === []) {
+            $values = (array)$saml->getAttributeWithFriendlyName($name);
+        }
+
+        // an attribute without a value must not win over the next one
+        return array_values(array_filter($values, static fn($value) => trim((string)$value) !== ''));
     }
 }
