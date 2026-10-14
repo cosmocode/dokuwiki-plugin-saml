@@ -1,3 +1,6 @@
-===== No Data Found =====
+==== No Data Found ====
 
-No valid configuration data was found. Either you provided the wrong file or the format is different from what we expect. You need to find the right values yourself.
+The wiki found no usable configuration data. The metadata must give an entity ID, a
+signing certificate and a Single Sign-On address for the HTTP-Redirect binding. Either
+the file is the wrong one, or its format is different from the one that the wiki expects.
+In that case you must find the values yourself.

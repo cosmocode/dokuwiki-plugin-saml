@@ -1,3 +1,5 @@
-===== Data Found =====
+==== Data Found ====
 
-Some configuration data was found. Please use the [[?do=admin&page=config#plugin____saml____plugin_settings_name|Configuration Manager]] to configure the SAML plugin with these values.
+The wiki read these values out of the metadata. Compare them with the values that the
+wiki uses now. The button below writes the new values into the configuration. You can
+also set them by hand in the [[?do=admin&page=config#plugin____saml____plugin_settings_name|Configuration Manager]].

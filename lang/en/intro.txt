@@ -1,47 +1,15 @@
 ====== SAML Configuration Helper ======
 
-This tool helps you to find the right configuration parameters for the SAML
-plugin by parsing the Federation metadata provided by your Identity Provider.
+This tool helps with the SAML plugin configuration and Identity Provider setup.
 
-===== URL Option =====
+===== Metadata Import =====
 
-**Metadata Endpoint**
+Your Identity Provider (IdP) exports its configuration as an XML document. This metadata document can be used to
+configure the most important parts of the SAML plugin. You can either let the wiki download the metadata from
+your Identity Provider or copy/paste the metadata into the form below.
 
-For //Active Directory Federation Services// (ADFS) the metadata can be found at:
+The exact URL of the metadata document depends on your Identity Provider. These are the usual places:
 
-''%%https://adfs.example.org/FederationMetadata/2007-06/FederationMetadata.xml%%''
-
-For //Shibboleth//, it's most often found at:
-
-''%%https://idp.example.edu/idp/shibboleth%%''
-
-For //Keycloak//, it's found at:
-
-''%%https://keycloak.example.org/realms/<your-realm>/protocol/saml/descriptor%%''
-
-There is no common URL for all Identity Providers. SAML 2.0 has no discovery
-like the ''.well-known'' URLs of OpenID Connect.
-
-Simply paste this URL (with the correct server name) below using the //Metadata Endpoint//
-formfield.
-
-This URL Option requires:
-
-   * ''DokuHTTPClient'' to be available
-   * The URL to be hosted using a trusted certificate
-
-The DokuHTTPClient will check the certificate validity of the
-the URL. So, if you use a self-signed or corporate internal certificate, you
-will need use the Copy/Paste Option instead.
-
-
-===== Copy/Paste Option =====
-
-**The XML Metadata**
-
-Obtain a copy of your identity providers' metadata (often hosted at one of the
-example URLs from the URL Option), and paste in the entire EntityDescriptor
-element into the //The XML Metadata// formfiled.
-
-Copy everything between ''%%<EntityDescriptor%%'' and
-''%%</EntityDescriptor>%%'' (including the ''%%EntityDescriptor%%'' tags themselves).
+   * Active Directory Federation Services (ADFS):\\ ''%%https://adfs.example.org/FederationMetadata/2007-06/FederationMetadata.xml%%''
+   * Shibboleth:\\ ''%%https://idp.example.edu/idp/shibboleth%%''
+   * Keycloak:\\ ''%%https://keycloak.example.org/realms/<your-realm>/protocol/saml/descriptor%%''

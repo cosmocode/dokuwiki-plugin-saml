@@ -1,5 +1,7 @@
-===== Key of this Wiki =====
+===== IdP Setup =====
 
-The wiki signs its messages with its own key and receives encrypted assertions for it. It created the key itself; the private key never leaves the wiki.
+You will need to create a client configuration in your Identity Provider (IdP) for this wiki.
+The wiki will act as a Service Provider (SP). Most IdPs can import the SP metadata via an XML document which you
+can download below.
 
-Give the certificate below to your Identity Provider, or let it read the SP metadata of this wiki. A self-signed certificate is the standard here: the Identity Provider compares the certificate with the copy that it has.
+Part of that metadata is a public key that the wiki uses to sign its messages. You can see and copy it below.
