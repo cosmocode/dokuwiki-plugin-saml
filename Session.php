@@ -40,9 +40,11 @@ class Session
      */
     public function setLogin($user, array $userinfo)
     {
-        $_SESSION[DOKU_COOKIE]['auth']['user'] = $user;
-        $_SESSION[DOKU_COOKIE]['auth']['info'] = $userinfo;
-        $_SESSION[DOKU_COOKIE]['auth']['buid'] = auth_browseruid();
+        $this->write(static function () use ($user, $userinfo) {
+            $_SESSION[DOKU_COOKIE]['auth']['user'] = $user;
+            $_SESSION[DOKU_COOKIE]['auth']['info'] = $userinfo;
+            $_SESSION[DOKU_COOKIE]['auth']['buid'] = auth_browseruid();
+        });
     }
 
     /**
@@ -52,9 +54,11 @@ class Session
      */
     public function clearLogin()
     {
-        unset($_SESSION[DOKU_COOKIE]['auth']);
-        $this->set('expiry', null);
-        $this->set('idpsession', null);
+        $this->write(function () {
+            unset($_SESSION[DOKU_COOKIE]['auth']);
+            $this->set('expiry', null);
+            $this->set('idpsession', null);
+        });
     }
 
     /**
@@ -208,10 +212,33 @@ class Session
      */
     protected function set($key, $value)
     {
-        if ($value === null) {
-            unset($_SESSION[DOKU_COOKIE]['plugin']['saml'][$key]);
-            return;
-        }
-        $_SESSION[DOKU_COOKIE]['plugin']['saml'][$key] = $value;
+        $this->write(static function () use ($key, $value) {
+            if ($value === null) {
+                unset($_SESSION[DOKU_COOKIE]['plugin']['saml'][$key]);
+                return;
+            }
+            $_SESSION[DOKU_COOKIE]['plugin']['saml'][$key] = $value;
+        });
+    }
+
+    /**
+     * Change the data in the session
+     *
+     * DokuWiki closes the session before it runs the action of a request, so a change
+     * that happens in an action handler has to open it again. It then also writes the
+     * session and closes it, which leaves the request as it found it. A change inside
+     * another change finds the session open already and keeps it so.
+     *
+     * @param callable $change makes the change
+     * @return void
+     */
+    protected function write(callable $change)
+    {
+        $closed = session_status() !== PHP_SESSION_ACTIVE;
+        if ($closed) @session_start();
+
+        $change();
+
+        if ($closed) session_write_close();
     }
 }
