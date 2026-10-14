@@ -82,6 +82,57 @@ class LoginTest extends AbstractMessageTest
     }
 
     /**
+     * A logout does not start a new login
+     *
+     * The core sends the browser to do=login after a logout. Without the mark of the
+     * logout the plugin would read that as a request to log in and send the user back
+     * to the identity provider, which still knows them. The user sees their page.
+     */
+    public function testLogoutDoesNotLogInAgain()
+    {
+        global $ACT;
+        $_POST['SAMLResponse'] = $this->getResponse();
+        (new LoginAuth())->trustExternal('', '', false);
+        $_POST = [];
+
+        // the core clears its part of the session and then calls logOff()
+        global $auth;
+        $auth = new LoginAuth();
+        auth_logoff();
+
+        $ACT = 'login';
+        $ok = (new LoginAuth())->trustExternal('', '', false);
+
+        $this->assertFalse($ok);
+        $this->assertNull($this->getRequestId(), 'the wiki asked the identity provider again');
+        $this->assertEquals('show', $ACT);
+    }
+
+    /**
+     * A click on the login link sends the user to the identity provider
+     */
+    public function testLoginLinkStartsLogin()
+    {
+        global $ACT;
+        $ACT = 'login';
+
+        $ok = (new LoginAuth())->trustExternal('', '', false);
+
+        $this->assertFalse($ok);
+        $this->assertNotNull($this->getRequestId(), 'the wiki asked no identity provider');
+    }
+
+    /**
+     * The identifier of the request that the wiki sent to the identity provider
+     *
+     * @return string|null
+     */
+    protected function getRequestId()
+    {
+        return $_SESSION[DOKU_COOKIE]['plugin']['saml']['requestid'] ?? null;
+    }
+
+    /**
      * The same response a second time is refused
      */
     public function testRefusesReplay()

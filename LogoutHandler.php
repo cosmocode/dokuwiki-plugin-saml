@@ -78,6 +78,7 @@ class LogoutHandler
         }
 
         $this->session->clearRequestId();
+        $this->session->clearLoggedOut();
     }
 
     /**

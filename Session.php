@@ -58,6 +58,40 @@ class Session
     }
 
     /**
+     * Remember that this browser just ended its login
+     *
+     * @return void
+     */
+    public function setLoggedOut()
+    {
+        $this->set('loggedout', true);
+    }
+
+    /**
+     * Did this browser just end its login?
+     *
+     * The mark is used up by this call.
+     *
+     * @return bool
+     */
+    public function takeLoggedOut()
+    {
+        $loggedout = (bool)$this->get('loggedout', false);
+        $this->clearLoggedOut();
+        return $loggedout;
+    }
+
+    /**
+     * Forget that this browser ended its login
+     *
+     * @return void
+     */
+    public function clearLoggedOut()
+    {
+        $this->set('loggedout', null);
+    }
+
+    /**
      * The session of the user at the identity provider
      *
      * @return array nameid, format, namequalifier, spnamequalifier and sessionindex,

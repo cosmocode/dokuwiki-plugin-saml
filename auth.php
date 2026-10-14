@@ -75,7 +75,15 @@ class auth_plugin_saml extends auth_plugin_authplain
         }
 
         // the core cleans $ACT only later, in act_dispatch()
-        if (act_clean($ACT) == 'login' || $this->isAutoLogin()) {
+        if (act_clean($ACT) == 'login') {
+            if ($this->session->takeLoggedOut()) {
+                // the core sends the browser here after a logout. Show the page that
+                // the user was on, a login form of this plugin has nothing to offer.
+                $ACT = 'show';
+            } else {
+                $this->startLogin();
+            }
+        } elseif ($this->isAutoLogin()) {
             $this->startLogin();
         }
 
@@ -96,6 +104,7 @@ class auth_plugin_saml extends auth_plugin_authplain
         global $ID;
 
         set_doku_pref('saml_autologin', 0);
+        $this->session->setLoggedOut();
 
         if (!$this->getConf('use_slo')) return;
         if (!$this->getConf('slo_endpoint')) return;
