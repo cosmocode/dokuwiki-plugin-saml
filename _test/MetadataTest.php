@@ -2,7 +2,9 @@
 
 namespace dokuwiki\plugin\saml\test;
 
+use DOMDocument;
 use dokuwiki\plugin\saml\KeyStore;
+use OneLogin\Saml2\Constants;
 
 /**
  * Tests for the SP metadata that describes this wiki
@@ -98,6 +100,24 @@ class MetadataTest extends AbstractMessageTest
 
         $this->assertEquals(1, substr_count($xml, 'use="signing"'));
         $this->assertEquals(1, substr_count($xml, 'use="encryption"'));
+    }
+
+    /**
+     * The metadata announces the Single Logout Service of the wiki
+     */
+    public function testLogoutService()
+    {
+        $doc = new DOMDocument();
+        $doc->loadXML($this->getMetadata());
+
+        $services = $doc->getElementsByTagNameNS(Constants::NS_MD, 'SingleLogoutService');
+
+        $this->assertEquals(1, $services->length);
+        $this->assertEquals(Constants::BINDING_HTTP_REDIRECT, $services->item(0)->getAttribute('Binding'));
+        $this->assertEquals(
+            DOKU_URL . DOKU_SCRIPT . '?do=saml_sls',
+            $services->item(0)->getAttribute('Location')
+        );
     }
 
     /**

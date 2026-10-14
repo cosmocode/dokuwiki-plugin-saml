@@ -38,6 +38,7 @@ abstract class AbstractMessageTest extends DokuWikiTest
         $_SERVER['REQUEST_URI'] = '/' . DOKU_SCRIPT;
         unset($_SERVER['QUERY_STRING']);
         $_POST = [];
+        $_GET = [];
 
         self::seedServiceProviderKey();
     }
@@ -63,6 +64,7 @@ abstract class AbstractMessageTest extends DokuWikiTest
     public function tearDown(): void
     {
         $_POST = [];
+        $_GET = [];
         parent::tearDown();
     }
 
@@ -161,6 +163,83 @@ abstract class AbstractMessageTest extends DokuWikiTest
         }
 
         return base64_encode($xml);
+    }
+
+    /**
+     * A logout message of the identity provider
+     *
+     * @param array $options nameId, sessionIndex, destination, issuer, inResponseTo,
+     *                       status, sign
+     * @return string the message, base64 encoded
+     */
+    protected function getLogoutMessage($options = [])
+    {
+        $options = array_merge([
+            'nameId' => 'andi',
+            'sessionIndex' => '_session1',
+            'destination' => DOKU_URL . DOKU_SCRIPT . '?do=saml_sls',
+            'issuer' => self::IDPENTITY,
+            'inResponseTo' => '', // a LogoutResponse when it is set
+            'status' => Constants::STATUS_SUCCESS,
+            'sign' => true,
+        ], $options);
+
+        $time = gmdate('Y-m-d\TH:i:s\Z', time());
+        $head = ' xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol"' .
+            ' xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion"' .
+            ' ID="_message' . md5((string)microtime(true)) . '" Version="2.0"' .
+            ' IssueInstant="' . $time . '"' .
+            ' Destination="' . hsc($options['destination']) . '"';
+        $issuer = '<saml:Issuer>' . hsc($options['issuer']) . '</saml:Issuer>';
+
+        if ($options['inResponseTo'] !== '') {
+            $xml = '<samlp:LogoutResponse' . $head .
+                ' InResponseTo="' . hsc($options['inResponseTo']) . '">' . $issuer .
+                '<samlp:Status><samlp:StatusCode Value="' . hsc($options['status']) . '"/></samlp:Status>' .
+                '</samlp:LogoutResponse>';
+        } else {
+            $index = $options['sessionIndex'] === ''
+                ? ''
+                : '<samlp:SessionIndex>' . hsc($options['sessionIndex']) . '</samlp:SessionIndex>';
+            $xml = '<samlp:LogoutRequest' . $head . '>' . $issuer .
+                '<saml:NameID Format="urn:oasis:names:tc:SAML:1.1:nameid-format:unspecified">' .
+                hsc($options['nameId']) . '</saml:NameID>' . $index .
+                '</samlp:LogoutRequest>';
+        }
+
+        if ($options['sign']) {
+            $xml = Utils::addSign($xml, $this->getPem('key'), $this->getPem('crt'));
+        }
+
+        return base64_encode($xml);
+    }
+
+    /**
+     * Put a logout message of the Redirect binding into the request
+     *
+     * The signature of that binding travels next to the message, over the query string.
+     *
+     * @param string $message the base64 message
+     * @param bool $isRequest a LogoutRequest, otherwise a LogoutResponse
+     * @param bool $sign add the signature of the identity provider
+     * @return void
+     */
+    protected function sendByRedirect($message, $isRequest, $sign = true)
+    {
+        $name = $isRequest ? 'SAMLRequest' : 'SAMLResponse';
+        $deflated = base64_encode(gzdeflate(base64_decode($message)));
+
+        $_GET[$name] = $deflated;
+        if (!$sign) return;
+
+        $algorithm = XMLSecurityKey::RSA_SHA256;
+        $query = $name . '=' . urlencode($deflated) . '&SigAlg=' . urlencode($algorithm);
+
+        $key = new XMLSecurityKey($algorithm, ['type' => 'private']);
+        $key->loadKey($this->getPem('key'), false);
+
+        $_GET['SigAlg'] = $algorithm;
+        $_GET['Signature'] = base64_encode($key->signData($query));
     }
 
     /**
