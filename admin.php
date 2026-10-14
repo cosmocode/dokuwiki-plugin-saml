@@ -388,8 +388,8 @@ class admin_plugin_saml extends AdminPlugin
 
         echo '<dl>';
         echo '<dt>' . $this->getLang('key_metadata') . '</dt>';
-        $url = wl('', ['do' => 'saml'], true, '&');
-        echo '<dd><a href="' . hsc($url) . '">' . hsc($url) . '</a></dd>';
+        $url = DOKU_URL . DOKU_SCRIPT . '?do=saml';
+        echo '<dd><a href="' . hsc($url) . '" target="_blank">' . hsc($url) . '</a></dd>';
         echo '<dt>' . $this->getLang('key_expiry') . '</dt>';
         echo '<dd>' . hsc(dformat($keys->getExpiry())) . '</dd>';
         echo '</dl>';

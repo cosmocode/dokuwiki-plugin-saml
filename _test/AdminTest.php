@@ -165,7 +165,7 @@ class AdminTest extends AbstractMessageTest
         $admin->html();
         $html = ob_get_clean();
 
-        $this->assertStringContainsString(hsc(wl('', ['do' => 'saml'], true, '&')), $html);
+        $this->assertStringContainsString(hsc(DOKU_URL . DOKU_SCRIPT . '?do=saml'), $html);
     }
 
     /**

@@ -85,8 +85,8 @@ class action_plugin_saml extends ActionPlugin
             exit();
         }
 
-        header('Content-Type: application/samlmetadata+xml');
-        header('Content-Disposition: attachment; filename="saml-metadata.xml"');
+        header('Content-Type: application/xml');
+        header('Content-Disposition: inline; filename="saml-metadata.xml"');
         echo $xml;
         exit();
     }
