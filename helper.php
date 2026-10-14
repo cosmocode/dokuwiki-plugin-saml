@@ -5,6 +5,7 @@ use dokuwiki\plugin\saml\LogoutHandler;
 use dokuwiki\plugin\saml\Session;
 use dokuwiki\plugin\saml\Settings;
 use OneLogin\Saml2\Auth;
+use OneLogin\Saml2\Settings as LibrarySettings;
 
 /**
  * SAML authentication plugin
@@ -19,6 +20,9 @@ class helper_plugin_saml extends Plugin
 
     /**
      * The SAML library, set up with the configuration of this plugin
+     *
+     * Built on first use. The wiki has to load and send its SP metadata before an admin
+     * can know the settings of the identity provider.
      *
      * @return Auth
      * @throws Exception when the configuration is not valid
@@ -77,12 +81,18 @@ class helper_plugin_saml extends Plugin
     /**
      * The SP metadata that describes this wiki to the identity provider
      *
+     * The identity provider may create its client from this file, so the wiki sends it
+     * before an admin can know the settings of the identity provider. The library
+     * therefore checks the service provider part of the settings only.
+     *
      * @return string the metadata in XML
-     * @throws Exception when the configuration is not valid
+     * @throws Exception when the settings of this wiki are not valid
      */
     public function getMetadata()
     {
-        return $this->getSamlLib()->getSettings()->getSPMetadata(
+        $settings = new LibrarySettings($this->getSettings()->toArray(), true);
+
+        return $settings->getSPMetadata(
             true, // publish the certificate for encryption as well
             null, // validUntil: the next parameter drops it
             null, // cacheDuration: the default of one week

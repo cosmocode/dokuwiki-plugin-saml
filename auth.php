@@ -3,7 +3,6 @@
 use dokuwiki\plugin\saml\ReplayCache;
 use dokuwiki\plugin\saml\Session;
 use dokuwiki\plugin\saml\UserMapper;
-use OneLogin\Saml2\Auth;
 
 /**
  * SAML authentication plugin
@@ -13,9 +12,6 @@ use OneLogin\Saml2\Auth;
  */
 class auth_plugin_saml extends auth_plugin_authplain
 {
-    /** @var Auth the SAML authentication library */
-    protected $saml;
-
     /** @var UserMapper the user data of a SAML response */
     protected $mapper;
 
@@ -50,7 +46,6 @@ class auth_plugin_saml extends auth_plugin_authplain
         $this->replay = new ReplayCache();
 
         $this->hlp = plugin_load('helper', 'saml');
-        $this->saml = $this->hlp->getSamlLib();
     }
 
     /**
@@ -105,22 +100,23 @@ class auth_plugin_saml extends auth_plugin_authplain
         if (!$this->getConf('use_slo')) return;
         if (!$this->getConf('slo_endpoint')) return;
 
-        $saml = $this->session->getIdpSession();
-        if ($saml['nameid'] === '') return; // no SAML session to end
+        $idp = $this->session->getIdpSession();
+        if ($idp['nameid'] === '') return; // no SAML session to end
 
         $this->session->clearLogin();
 
-        $url = $this->saml->logout(
+        $saml = $this->hlp->getSamlLib();
+        $url = $saml->logout(
             $ID, // returnTo: the identity provider sends this page back as the RelayState
             [], // parameters: none
-            $saml['nameid'],
-            $saml['sessionindex'],
+            $idp['nameid'],
+            $idp['sessionindex'],
             true, // stay: the redirect happens below
-            $saml['format'],
-            $saml['namequalifier'],
-            $saml['spnamequalifier']
+            $idp['format'],
+            $idp['namequalifier'],
+            $idp['spnamequalifier']
         );
-        $this->session->setRequestId($this->saml->getLastRequestID()); // the answer names it
+        $this->session->setRequestId($saml->getLastRequestID()); // the answer names it
         send_redirect($url);
     }
 
@@ -145,15 +141,22 @@ class auth_plugin_saml extends auth_plugin_authplain
     {
         global $ID;
 
-        $url = $this->saml->login(
-            $ID, // returnTo: the identity provider sends this page back as the RelayState
-            [], // parameter: we do not send any additional parameters
-            false, // forceAuthn: would skip any available SSO data, not what we want
-            false, // isPassive: would avoid all user interaction, not what we want
-            true, // stay: do not redirect, we do that ourselves
-            false // setNameIdPolicy: we need to disable this or SAML complains about our request
-        );
-        $this->session->setRequestId($this->saml->getLastRequestID()); // check the answer
+        try {
+            $saml = $this->hlp->getSamlLib();
+            $url = $saml->login(
+                $ID, // returnTo: the identity provider sends this page back as the RelayState
+                [], // parameter: we do not send any additional parameters
+                false, // forceAuthn: would skip any available SSO data, not what we want
+                false, // isPassive: would avoid all user interaction, not what we want
+                true, // stay: do not redirect, we do that ourselves
+                false // setNameIdPolicy: we need to disable this or SAML complains about our request
+            );
+        } catch (Exception $e) {
+            $this->abortLogin('SAML: ' . hsc($e->getMessage()));
+            return;
+        }
+
+        $this->session->setRequestId($saml->getLastRequestID()); // check the answer
         send_redirect($url);
     }
 
@@ -176,18 +179,19 @@ class auth_plugin_saml extends auth_plugin_authplain
         }
 
         try {
-            $this->saml->processResponse($requestId);
-            if (!$this->saml->isAuthenticated()) {
-                return $this->abortLogin('SAML: ' . hsc($this->saml->getLastErrorReason()));
+            $saml = $this->hlp->getSamlLib();
+            $saml->processResponse($requestId);
+            if (!$saml->isAuthenticated()) {
+                return $this->abortLogin('SAML: ' . hsc($saml->getLastErrorReason()));
             }
 
-            if ($this->replay->isKnown($this->saml->getLastAssertionId())) {
+            if ($this->replay->isKnown($saml->getLastAssertionId())) {
                 return $this->abortLogin($this->getLang('err_replay'));
             }
-            $this->replay->add($this->saml->getLastAssertionId(), $this->saml->getLastAssertionNotOnOrAfter());
+            $this->replay->add($saml->getLastAssertionId(), $saml->getLastAssertionNotOnOrAfter());
 
             // always read the user id from the SAML response
-            $userinfo = $this->mapper->getUserData($this->saml);
+            $userinfo = $this->mapper->getUserData($saml);
 
             if ($this->getConf('autoprovisioning')) {
                 $this->provisionUser($userinfo);
@@ -198,13 +202,13 @@ class auth_plugin_saml extends auth_plugin_authplain
             // the user is known now, only now they become the user of this request
             $this->setCurrentUser($userinfo);
             $this->session->setLogin($userinfo['user'], $userinfo);
-            $this->session->setExpiry($this->saml->getSessionExpiration());
+            $this->session->setExpiry($saml->getSessionExpiration());
             $this->session->setIdpSession([
-                'nameid' => (string)$this->saml->getNameId(),
-                'format' => (string)$this->saml->getNameIdFormat(),
-                'namequalifier' => (string)$this->saml->getNameIdNameQualifier(),
-                'spnamequalifier' => (string)$this->saml->getNameIdSPNameQualifier(),
-                'sessionindex' => (string)$this->saml->getSessionIndex(),
+                'nameid' => (string)$saml->getNameId(),
+                'format' => (string)$saml->getNameIdFormat(),
+                'namequalifier' => (string)$saml->getNameIdNameQualifier(),
+                'spnamequalifier' => (string)$saml->getNameIdSPNameQualifier(),
+                'sessionindex' => (string)$saml->getSessionIndex(),
             ]);
             set_doku_pref('saml_autologin', 1);
 

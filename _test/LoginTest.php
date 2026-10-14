@@ -35,6 +35,22 @@ class LoginTest extends AbstractMessageTest
     }
 
     /**
+     * The wiki still loads when nobody configured the identity provider
+     *
+     * An admin needs the admin page and the SP metadata of the wiki before they can
+     * know the settings of the identity provider.
+     */
+    public function testWithoutConfiguration()
+    {
+        global $conf;
+        $conf['plugin']['saml'] = $this->getDefaultConf();
+
+        $auth = new LoginAuth();
+
+        $this->assertFalse($auth->trustExternal('', '', false));
+    }
+
+    /**
      * A valid response logs the user in
      */
     public function testLogin()

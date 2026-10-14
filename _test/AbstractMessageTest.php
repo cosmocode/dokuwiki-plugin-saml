@@ -109,6 +109,18 @@ abstract class AbstractMessageTest extends DokuWikiTest
     }
 
     /**
+     * The configuration of the plugin before an admin changes anything
+     *
+     * @return array
+     */
+    protected function getDefaultConf()
+    {
+        $conf = [];
+        include DOKU_PLUGIN . 'saml/conf/default.php';
+        return $conf;
+    }
+
+    /**
      * The library, set up like the plugin sets it up
      *
      * @param array $overrides settings that differ from the default

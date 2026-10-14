@@ -31,6 +31,21 @@ class MetadataTest extends AbstractMessageTest
     }
 
     /**
+     * A wiki without a configured identity provider still describes itself
+     *
+     * The identity provider may create its client from this file, so the wiki has to
+     * send it before an admin can fill in the settings of the identity provider.
+     */
+    public function testWithoutConfiguration()
+    {
+        $xml = $this->getMetadata($this->getDefaultConf());
+
+        $this->assertEquals([], $this->getLib()->getSettings()->validateMetadata($xml));
+        $this->assertStringContainsString('entityID="' . DOKU_URL . '"', $xml);
+        $this->assertStringContainsString('<ds:Signature', $xml);
+    }
+
+    /**
      * The metadata is valid and describes this wiki
      */
     public function testMetadata()
