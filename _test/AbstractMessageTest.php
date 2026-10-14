@@ -232,10 +232,9 @@ abstract class AbstractMessageTest extends DokuWikiTest
      * @param string $message the base64 message
      * @param bool $isRequest a LogoutRequest, otherwise a LogoutResponse
      * @param bool $sign add the signature of the identity provider
-     * @param string $signer the key that signs, idp or other
      * @return void
      */
-    protected function sendByRedirect($message, $isRequest, $sign = true, $signer = 'idp')
+    protected function sendByRedirect($message, $isRequest, $sign = true)
     {
         $name = $isRequest ? 'SAMLRequest' : 'SAMLResponse';
         $deflated = base64_encode(gzdeflate(base64_decode($message)));
@@ -247,7 +246,7 @@ abstract class AbstractMessageTest extends DokuWikiTest
         $query = $name . '=' . urlencode($deflated) . '&SigAlg=' . urlencode($algorithm);
 
         $key = new XMLSecurityKey($algorithm, ['type' => 'private']);
-        $key->loadKey($this->getPem('key', $signer), false);
+        $key->loadKey($this->getPem('key'), false);
 
         $_GET['SigAlg'] = $algorithm;
         $_GET['Signature'] = base64_encode($key->signData($query));

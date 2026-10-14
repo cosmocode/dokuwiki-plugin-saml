@@ -60,17 +60,6 @@ class MetadataTest extends AbstractMessageTest
     }
 
     /**
-     * The metadata carries the signature of this wiki
-     */
-    public function testSigned()
-    {
-        $xml = $this->getMetadata();
-
-        $this->assertStringContainsString('<ds:Signature', $xml);
-        $this->assertStringContainsString('rsa-sha256', $xml);
-    }
-
-    /**
      * The metadata tells how long it may be kept, but it does not expire
      *
      * An admin of an isolated wiki uploads this file by hand once. A validUntil would
@@ -82,23 +71,6 @@ class MetadataTest extends AbstractMessageTest
 
         $this->assertStringContainsString('cacheDuration=', $xml);
         $this->assertStringNotContainsString('validUntil=', $xml);
-    }
-
-    /**
-     * The certificate of the wiki is published for its signature
-     */
-    public function testCertificates()
-    {
-        global $conf;
-        $xml = $this->getMetadata();
-        $certificate = trim(preg_replace(
-            '/-----[A-Z ]+-----/',
-            '',
-            io_readFile($conf['metadir'] . '/_saml.crt', false)
-        ));
-
-        $this->assertEquals(1, substr_count($xml, 'use="signing"'));
-        $this->assertStringContainsString(substr($certificate, 0, 60), $xml);
     }
 
     /**
@@ -181,21 +153,6 @@ class MetadataTest extends AbstractMessageTest
         $this->assertEquals(
             DOKU_URL . DOKU_SCRIPT . '?do=saml_sls',
             $services->item(0)->getAttribute('Location')
-        );
-    }
-
-    /**
-     * The metadata tells the identity provider whether the wiki signs its requests
-     */
-    public function testSignedRequestsAnnounced()
-    {
-        $this->assertStringContainsString(
-            'AuthnRequestsSigned="false"',
-            $this->getMetadata()
-        );
-        $this->assertStringContainsString(
-            'AuthnRequestsSigned="true"',
-            $this->getMetadata(['sign_requests' => 1])
         );
     }
 

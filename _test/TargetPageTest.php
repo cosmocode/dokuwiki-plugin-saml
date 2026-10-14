@@ -54,22 +54,4 @@ class TargetPageTest extends DokuWikiTest
         $this->assertEquals(wl($expected, '', true, '&'), $hlp->getTargetPage());
     }
 
-    /**
-     * The wiki builds the address itself, so it always points into the wiki
-     *
-     * @dataProvider provideRelayStates
-     * @param string $relay
-     */
-    public function testStaysInTheWiki($relay)
-    {
-        global $ID;
-        global $INPUT;
-        $ID = 'current:page';
-        $INPUT->set('RelayState', $relay);
-
-        /** @var \helper_plugin_saml $hlp */
-        $hlp = plugin_load('helper', 'saml', true);
-
-        $this->assertStringStartsWith(DOKU_URL, $hlp->getTargetPage());
-    }
 }

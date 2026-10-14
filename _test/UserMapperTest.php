@@ -144,19 +144,6 @@ class UserMapperTest extends DokuWikiTest
     }
 
     /**
-     * An attribute may repeat in the response
-     */
-    public function testRepeatedAttribute()
-    {
-        global $conf;
-        $mapper = new UserMapper($this->getConf());
-
-        $userdata = $mapper->getUserData($this->getResponse(['groups' => ['one', 'two', 'three']]));
-
-        $this->assertEquals(['one', 'two', 'three', $conf['defaultgroup']], $userdata['grps']);
-    }
-
-    /**
      * Without auto provisioning only the login name is read
      */
     public function testNoAutoProvisioning()

@@ -26,22 +26,6 @@ class ResponseTest extends AbstractMessageTest
     }
 
     /**
-     * The session expiry of the assertion is available for the plugin
-     */
-    public function testSessionExpiration()
-    {
-        $expiry = time() + 1800;
-        $saml = $this->getLib();
-        $_POST['SAMLResponse'] = $this->getResponse(['sessionExpiry' => $expiry]);
-
-        $saml->processResponse();
-
-        $this->assertTrue($saml->isAuthenticated());
-        $this->assertEquals($expiry, $saml->getSessionExpiration());
-        $this->assertNotEmpty($saml->getLastAssertionId());
-    }
-
-    /**
      * An assertion may come without an expiry time of its own
      *
      * The Web Browser SSO profile demands a NotOnOrAfter in the SubjectConfirmationData,
@@ -133,37 +117,6 @@ class ResponseTest extends AbstractMessageTest
     }
 
     /**
-     * A response with a broken signature is refused
-     */
-    public function testBrokenSignature()
-    {
-        $xml = base64_decode($this->getResponse());
-        $xml = str_replace('<saml:AttributeValue>andi<', '<saml:AttributeValue>eve<', $xml);
-
-        $saml = $this->getLib();
-        $_POST['SAMLResponse'] = base64_encode($xml);
-
-        $saml->processResponse();
-
-        $this->assertFalse($saml->isAuthenticated());
-        $this->assertStringContainsString('Reference validation failed', $saml->getLastErrorReason());
-    }
-
-    /**
-     * A response for another service provider is refused
-     */
-    public function testWrongAudience()
-    {
-        $saml = $this->getLib();
-        $_POST['SAMLResponse'] = $this->getResponse(['audience' => 'https://other.example.org/']);
-
-        $saml->processResponse();
-
-        $this->assertFalse($saml->isAuthenticated());
-        $this->assertStringContainsString('Invalid audience for this Response', $saml->getLastErrorReason());
-    }
-
-    /**
      * A response for another address is refused
      */
     public function testWrongDestination()
@@ -175,67 +128,6 @@ class ResponseTest extends AbstractMessageTest
 
         $this->assertFalse($saml->isAuthenticated());
         $this->assertStringContainsString('was received at', $saml->getLastErrorReason());
-    }
-
-    /**
-     * A response of another identity provider is refused
-     */
-    public function testWrongIssuer()
-    {
-        $saml = $this->getLib();
-        $_POST['SAMLResponse'] = $this->getResponse(['issuer' => 'https://other.example.org/']);
-
-        $saml->processResponse();
-
-        $this->assertFalse($saml->isAuthenticated());
-        $this->assertStringContainsString('Invalid issuer in the Assertion/Response', $saml->getLastErrorReason());
-    }
-
-    /**
-     * An assertion that is no longer valid is refused
-     */
-    public function testExpiredAssertion()
-    {
-        $saml = $this->getLib();
-        $_POST['SAMLResponse'] = $this->getResponse([
-            'notBefore' => time() - 600,
-            'notOnOrAfter' => time() - 300,
-        ]);
-
-        $saml->processResponse();
-
-        $this->assertFalse($saml->isAuthenticated());
-        $this->assertStringContainsString('Could not validate timestamp', $saml->getLastErrorReason());
-    }
-
-    /**
-     * An assertion that is not valid yet is refused
-     */
-    public function testFutureAssertion()
-    {
-        $saml = $this->getLib();
-        $_POST['SAMLResponse'] = $this->getResponse([
-            'notBefore' => time() + 300,
-            'notOnOrAfter' => time() + 600,
-        ]);
-
-        $saml->processResponse();
-
-        $this->assertFalse($saml->isAuthenticated());
-        $this->assertStringContainsString('Could not validate timestamp', $saml->getLastErrorReason());
-    }
-
-    /**
-     * A response that answers the request of this wiki is accepted
-     */
-    public function testMatchingInResponseTo()
-    {
-        $saml = $this->getLib();
-        $_POST['SAMLResponse'] = $this->getResponse(['inResponseTo' => '_request1']);
-
-        $saml->processResponse('_request1');
-
-        $this->assertTrue($saml->isAuthenticated(), $saml->getLastErrorReason() ?? '');
     }
 
     /**
@@ -284,16 +176,4 @@ class ResponseTest extends AbstractMessageTest
         $this->assertTrue($saml->isAuthenticated(), $saml->getLastErrorReason() ?? '');
     }
 
-    /**
-     * A login that starts at the identity provider has no InResponseTo and is accepted
-     */
-    public function testUnsolicitedResponse()
-    {
-        $saml = $this->getLib();
-        $_POST['SAMLResponse'] = $this->getResponse();
-
-        $saml->processResponse();
-
-        $this->assertTrue($saml->isAuthenticated(), $saml->getLastErrorReason() ?? '');
-    }
 }

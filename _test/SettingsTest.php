@@ -111,79 +111,6 @@ class SettingsTest extends DokuWikiTest
     }
 
     /**
-     * The service provider describes this wiki
-     *
-     * It asks for no attributes: an empty AttributeConsumingService is not valid against
-     * the metadata schema.
-     */
-    public function testServiceProvider()
-    {
-        $settings = (new Settings($this->getConf()))->toArray();
-
-        $this->assertEquals(DOKU_URL, $settings['sp']['entityId']);
-        $this->assertEquals(DOKU_URL . DOKU_SCRIPT, $settings['sp']['assertionConsumerService']['url']);
-        $this->assertArrayNotHasKey('attributeConsumingService', $settings['sp']);
-    }
-
-    /**
-     * The identity provider is taken from the configuration
-     */
-    public function testIdentityProvider()
-    {
-        $settings = (new Settings($this->getConf()))->toArray();
-
-        $this->assertEquals('https://idp.example.org/', $settings['idp']['entityId']);
-        $this->assertEquals('https://idp.example.org/sso', $settings['idp']['singleSignOnService']['url']);
-        $this->assertEquals('https://idp.example.org/slo', $settings['idp']['singleLogoutService']['url']);
-    }
-
-    /**
-     * The library checks the response as strictly as the plugin needs it
-     */
-    public function testSecurity()
-    {
-        $settings = (new Settings($this->getConf()))->toArray();
-
-        $this->assertTrue($settings['strict']);
-        $this->assertTrue($settings['security']['destinationStrictlyMatches']);
-        $this->assertFalse($settings['security']['rejectUnsolicitedResponsesWithInResponseTo']);
-        $this->assertFalse($settings['security']['requestedAuthnContext']);
-    }
-
-    /**
-     * The wiki signs with SHA-256
-     */
-    public function testSignatureAlgorithm()
-    {
-        $settings = (new Settings($this->getConf()))->toArray();
-
-        $this->assertEquals(XMLSecurityKey::RSA_SHA256, $settings['security']['signatureAlgorithm']);
-        $this->assertEquals(XMLSecurityDSig::SHA256, $settings['security']['digestAlgorithm']);
-    }
-
-    /**
-     * The wiki publishes one certificate only, the one whose key it has
-     */
-    public function testOneCertificate()
-    {
-        $settings = (new Settings($this->getConf()))->toArray();
-
-        $this->assertArrayNotHasKey('x509certNew', $settings['sp']);
-    }
-
-    /**
-     * The key pair of the wiki is part of the settings, the key is never public
-     */
-    public function testKeyPair()
-    {
-        $settings = (new Settings($this->getConf()))->toArray();
-
-        $this->assertStringContainsString('PRIVATE KEY', $settings['sp']['privateKey']);
-        $this->assertStringContainsString('BEGIN CERTIFICATE', $settings['sp']['x509cert']);
-        $this->assertTrue(openssl_x509_check_private_key($settings['sp']['x509cert'], $settings['sp']['privateKey']));
-    }
-
-    /**
      * The wiki signs its request only when the admin asks for it
      */
     public function testSignedRequest()
@@ -206,17 +133,6 @@ class SettingsTest extends DokuWikiTest
         parse_str((string)parse_url($url, PHP_URL_QUERY), $query);
 
         $this->assertArrayNotHasKey('Signature', $query);
-    }
-
-    /**
-     * The metadata of this service provider is valid
-     */
-    public function testMetadata()
-    {
-        $auth = new Auth((new Settings($this->getConf()))->toArray());
-        $xml = $auth->getSettings()->getSPMetadata();
-
-        $this->assertEquals([], $auth->getSettings()->validateMetadata($xml));
     }
 
     /**

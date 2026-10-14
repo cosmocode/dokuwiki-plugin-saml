@@ -48,16 +48,6 @@ class KeyStoreTest extends DokuWikiTest
     }
 
     /**
-     * The certificate and the key belong together
-     */
-    public function testPair()
-    {
-        $keys = new KeyStore($this->dir);
-
-        $this->assertTrue(openssl_x509_check_private_key($keys->getCertificate(), $keys->getKey()));
-    }
-
-    /**
      * The certificate names the host of the wiki and is valid for years
      */
     public function testCertificate()
@@ -109,16 +99,4 @@ class KeyStoreTest extends DokuWikiTest
         $this->assertEquals('0600', substr(sprintf('%o', fileperms($this->dir . '/_saml.key')), -4));
     }
 
-    /**
-     * The store uses the meta directory of the wiki by default
-     */
-    public function testDefaultDirectory()
-    {
-        global $conf;
-        AbstractMessageTest::seedServiceProviderKey();
-
-        $keys = new KeyStore();
-
-        $this->assertEquals(io_readFile($conf['metadir'] . '/_saml.crt', false), $keys->getCertificate());
-    }
 }

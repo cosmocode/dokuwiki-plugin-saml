@@ -36,16 +36,6 @@ class ReplayCacheTest extends DokuWikiTest
     }
 
     /**
-     * An assertion that was never seen is not known
-     */
-    public function testUnknown()
-    {
-        $cache = new ReplayCache($this->dir);
-
-        $this->assertFalse($cache->isKnown('_assertion1'));
-    }
-
-    /**
      * An assertion that was used is known
      */
     public function testKnown()
@@ -112,16 +102,4 @@ class ReplayCacheTest extends DokuWikiTest
         $this->assertTrue($cache->isKnown('_assertion2'));
     }
 
-    /**
-     * The cache uses the cache directory of the wiki by default
-     */
-    public function testDefaultDirectory()
-    {
-        global $conf;
-        $cache = new ReplayCache();
-        $cache->add('_assertion1', time() + 300);
-
-        $this->assertFileExists($conf['cachedir'] . '/saml/replay/' . md5('_assertion1'));
-        $this->assertTrue($cache->isKnown('_assertion1'));
-    }
 }

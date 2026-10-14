@@ -3,6 +3,7 @@
 namespace dokuwiki\plugin\saml\test;
 
 use auth_plugin_saml;
+use dokuwiki\plugin\saml\Session;
 
 /**
  * Gives the test the plugin under its own name
@@ -83,6 +84,26 @@ class LoginTest extends AbstractMessageTest
         $this->assertEquals('andi', $saml['nameid']);
         $this->assertEquals('_session1', $saml['sessionindex']);
         $this->assertNotEmpty($_SESSION[DOKU_COOKIE]['plugin']['saml']['expiry']);
+    }
+
+    /**
+     * A login that the identity provider ended is not used again
+     *
+     * The assertion tells how long the session of the identity provider lasts. The wiki
+     * trusts its own session until that time and asks the identity provider afterwards.
+     */
+    public function testExpiredSession()
+    {
+        $_POST['SAMLResponse'] = $this->getResponse();
+        (new LoginAuth())->trustExternal('', '', false);
+        $_POST = [];
+
+        (new Session())->setExpiry(time() - 1);
+
+        $ok = (new LoginAuth())->trustExternal('', '', false);
+
+        $this->assertFalse($ok);
+        $this->assertArrayNotHasKey('auth', $_SESSION[DOKU_COOKIE]);
     }
 
     /**

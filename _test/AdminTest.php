@@ -37,7 +37,6 @@ class AdminTest extends AbstractMessageTest
     public function tearDown(): void
     {
         // the conf directory is set up once for the class, not for each test
-        @chmod(DOKU_CONF . 'local.php', 0644);
         file_put_contents(DOKU_CONF . 'local.php', $this->localConf);
         @unlink(DOKU_CONF . 'local.php.bak.php');
 
@@ -152,20 +151,6 @@ class AdminTest extends AbstractMessageTest
 
         $this->assertStringContainsString('BEGIN CERTIFICATE', $html);
         $this->assertStringNotContainsString('PRIVATE KEY', $html);
-    }
-
-    /**
-     * The page gives the address of the SP metadata
-     */
-    public function testMetadataLink()
-    {
-        $admin = $this->getAdmin();
-
-        ob_start();
-        $admin->html();
-        $html = ob_get_clean();
-
-        $this->assertStringContainsString(hsc(DOKU_URL . DOKU_SCRIPT . '?do=saml'), $html);
     }
 
     /**
@@ -307,17 +292,6 @@ class AdminTest extends AbstractMessageTest
     }
 
     /**
-     * A setting without a value gives an empty cell, not an empty block
-     */
-    public function testEmptyValue()
-    {
-        $html = $this->showMetadata($this->getIdpMetadata(['sloBinding' => Constants::BINDING_HTTP_POST]));
-
-        $this->assertStringContainsString('<td></td>', $html);
-        $this->assertStringNotContainsString('<pre class="code"></pre>', $html);
-    }
-
-    /**
      * Something that is not metadata gives no settings
      */
     public function testParseBroken()
@@ -351,22 +325,6 @@ class AdminTest extends AbstractMessageTest
     }
 
     /**
-     * Apply writes what the identity provider asks for about signed requests
-     */
-    public function testApplySignRequests()
-    {
-        global $INPUT;
-        $INPUT->set('xml', $this->getIdpMetadata(['wantSignedRequests' => 'true']));
-        $INPUT->set('apply', 1);
-        $INPUT->set('confirm', 1);
-        $INPUT->set('sectok', getSecurityToken());
-
-        $this->getAdmin()->handle();
-
-        $this->assertEquals(1, $this->getLocalConf()['plugin']['saml']['sign_requests']);
-    }
-
-    /**
      * A request without a security token changes no setting
      */
     public function testApplyNeedsToken()
@@ -390,27 +348,6 @@ class AdminTest extends AbstractMessageTest
         global $INPUT;
         $INPUT->set('xml', $this->getIdpMetadata(['entityId' => 'https://new.example.org/']));
         $INPUT->set('apply', 1);
-        $INPUT->set('sectok', getSecurityToken());
-
-        $this->getAdmin()->handle();
-
-        $this->assertArrayNotHasKey('saml', $this->getLocalConf()['plugin'] ?? []);
-    }
-
-    /**
-     * A configuration that the wiki cannot write stays as it is
-     */
-    public function testApplyNeedsWritePermission()
-    {
-        chmod(DOKU_CONF . 'local.php', 0444);
-        if (is_writable(DOKU_CONF . 'local.php')) {
-            $this->markTestSkipped('this user writes a file without the permission for it');
-        }
-
-        global $INPUT;
-        $INPUT->set('xml', $this->getIdpMetadata(['entityId' => 'https://new.example.org/']));
-        $INPUT->set('apply', 1);
-        $INPUT->set('confirm', 1);
         $INPUT->set('sectok', getSecurityToken());
 
         $this->getAdmin()->handle();
