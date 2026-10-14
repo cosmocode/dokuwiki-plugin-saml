@@ -96,6 +96,7 @@ class admin_plugin_saml extends AdminPlugin
     {
         try {
             $info = IdPMetadataParser::parseXML($xml);
+            $signRequests = $this->getSignRequests($xml);
         } catch (Exception $e) {
             msg(sprintf($this->getLang('err_parse'), hsc($e->getMessage())), -1);
             return [];
@@ -107,6 +108,7 @@ class admin_plugin_saml extends AdminPlugin
             'endpoint' => $this->getRedirectUrl($idp['singleSignOnService'] ?? []),
             'slo_endpoint' => $this->getRedirectUrl($idp['singleLogoutService'] ?? []),
             'certificate' => $this->getCertificates($idp),
+            'sign_requests' => $signRequests,
         ];
 
         // a login is not possible without these three
@@ -135,6 +137,29 @@ class admin_plugin_saml extends AdminPlugin
         }
 
         return $service['url'];
+    }
+
+    /**
+     * Does the identity provider ask for a signature on the requests of this wiki?
+     *
+     * The parser of the library drops this attribute of the metadata. Without it the
+     * attribute counts as false, which the schema prescribes.
+     *
+     * @param string $xml the metadata
+     * @return int 1 when the identity provider asks for signed requests
+     * @throws Exception when the metadata cannot be read
+     */
+    protected function getSignRequests($xml)
+    {
+        $dom = Utils::loadXML(new DOMDocument(), $xml);
+        if (!$dom) return 0;
+
+        // the parser takes the first descriptor as well
+        $descriptors = Utils::query($dom, '//md:EntityDescriptor/md:IDPSSODescriptor');
+        if ($descriptors->length === 0) return 0;
+
+        $want = $descriptors->item(0)->getAttribute('WantAuthnRequestsSigned');
+        return in_array($want, ['true', '1'], true) ? 1 : 0;
     }
 
     /**

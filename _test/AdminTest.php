@@ -60,7 +60,7 @@ class AdminTest extends AbstractMessageTest
     /**
      * The metadata of a test identity provider
      *
-     * @param array $options ssoBinding, sloBinding, entityId, signers
+     * @param array $options ssoBinding, sloBinding, entityId, signers, wantSignedRequests
      * @return string the metadata in XML
      */
     protected function getIdpMetadata($options = [])
@@ -70,7 +70,12 @@ class AdminTest extends AbstractMessageTest
             'ssoBinding' => Constants::BINDING_HTTP_REDIRECT,
             'sloBinding' => Constants::BINDING_HTTP_REDIRECT,
             'signers' => ['idp'],
+            'wantSignedRequests' => null, // null leaves the attribute out
         ], $options);
+
+        $wants = $options['wantSignedRequests'] === null
+            ? ''
+            : ' WantAuthnRequestsSigned="' . $options['wantSignedRequests'] . '"';
 
         $keys = '';
         foreach ($options['signers'] as $signer) {
@@ -82,7 +87,8 @@ class AdminTest extends AbstractMessageTest
         return '<EntityDescriptor xmlns="urn:oasis:names:tc:SAML:2.0:metadata"' .
             ' xmlns:ds="http://www.w3.org/2000/09/xmldsig#"' .
             ' entityID="' . hsc($options['entityId']) . '">' .
-            '<IDPSSODescriptor protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol">' .
+            '<IDPSSODescriptor' . $wants .
+            ' protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol">' .
             $keys .
             '<SingleSignOnService Binding="' . hsc($options['ssoBinding']) . '"' .
             ' Location="https://idp.example.org/sso-from-metadata"/>' .
@@ -163,7 +169,7 @@ class AdminTest extends AbstractMessageTest
     }
 
     /**
-     * The page reads all four settings out of the metadata
+     * The page reads all five settings out of the metadata
      */
     public function testParse()
     {
@@ -174,6 +180,34 @@ class AdminTest extends AbstractMessageTest
         $this->assertStringContainsString('>https://idp.example.org/sso-from-metadata<', $html);
         $this->assertStringContainsString('>https://idp.example.org/slo-from-metadata<', $html);
         $this->assertStringContainsString($this->getCertBody(), $html);
+        $this->assertStringContainsString('<td>sign_requests</td>', $html);
+    }
+
+    /**
+     * The wiki signs its requests when the identity provider asks for it
+     *
+     * An identity provider says so with WantAuthnRequestsSigned. The attribute is
+     * optional and counts as false when it is missing.
+     */
+    public function testParseSignRequests()
+    {
+        $found = [
+            'missing' => $this->showMetadata($this->getIdpMetadata()),
+            'false' => $this->showMetadata($this->getIdpMetadata(['wantSignedRequests' => 'false'])),
+            'true' => $this->showMetadata($this->getIdpMetadata(['wantSignedRequests' => 'true'])),
+            'one' => $this->showMetadata($this->getIdpMetadata(['wantSignedRequests' => '1'])),
+        ];
+
+        $row = static fn($html) => preg_match(
+            '/<td>sign_requests<\/td>.*?<\/td><td><pre class="code">(\d)</s',
+            $html,
+            $m
+        ) ? $m[1] : 'no row';
+
+        $this->assertEquals('0', $row($found['missing']));
+        $this->assertEquals('0', $row($found['false']));
+        $this->assertEquals('1', $row($found['true']));
+        $this->assertEquals('1', $row($found['one']));
     }
 
     /**
@@ -314,6 +348,22 @@ class AdminTest extends AbstractMessageTest
             trim(Utils::formatCert($this->getCertBody())),
             $conf['plugin']['saml']['certificate']
         );
+    }
+
+    /**
+     * Apply writes what the identity provider asks for about signed requests
+     */
+    public function testApplySignRequests()
+    {
+        global $INPUT;
+        $INPUT->set('xml', $this->getIdpMetadata(['wantSignedRequests' => 'true']));
+        $INPUT->set('apply', 1);
+        $INPUT->set('confirm', 1);
+        $INPUT->set('sectok', getSecurityToken());
+
+        $this->getAdmin()->handle();
+
+        $this->assertEquals(1, $this->getLocalConf()['plugin']['saml']['sign_requests']);
     }
 
     /**
