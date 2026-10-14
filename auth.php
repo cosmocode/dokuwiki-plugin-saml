@@ -101,10 +101,27 @@ class auth_plugin_saml extends auth_plugin_authplain
      */
     public function logOff()
     {
-        global $ID;
+        global $ACT;
 
         set_doku_pref('saml_autologin', 0);
-        $this->session->setLoggedOut();
+
+        $this->startSingleLogout(); // does not come back when it sends the browser away
+
+        // the core sends the browser to a login form after its own logout action only
+        if (act_clean($ACT) == 'logout') $this->session->setLoggedOut();
+    }
+
+    /**
+     * Send the user to the Single Logout of the identity provider
+     *
+     * Returns without an action when the wiki does not use Single Logout or when the
+     * session holds no login of an identity provider.
+     *
+     * @return void
+     */
+    protected function startSingleLogout()
+    {
+        global $ID;
 
         if (!$this->getConf('use_slo')) return;
         if (!$this->getConf('slo_endpoint')) return;

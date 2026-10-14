@@ -102,6 +102,7 @@ class LoginTest extends AbstractMessageTest
         // the core clears its part of the session and then calls logOff()
         global $auth;
         $auth = new LoginAuth();
+        $ACT = 'logout';
         auth_logoff();
 
         $ACT = 'login';
@@ -110,6 +111,31 @@ class LoginTest extends AbstractMessageTest
         $this->assertFalse($ok);
         $this->assertNull($this->getRequestId(), 'the wiki asked the identity provider again');
         $this->assertEquals('show', $ACT);
+    }
+
+    /**
+     * A logout elsewhere leaves no mark that eats the next login
+     *
+     * Only its own logout action makes the core send the browser to do=login. A logout
+     * that starts at the identity provider answers that provider instead, so the mark
+     * would stay in the session and swallow the next click on the login link.
+     */
+    public function testLogoutElsewhereKeepsLoginWorking()
+    {
+        global $ACT;
+        $_POST['SAMLResponse'] = $this->getResponse();
+        (new LoginAuth())->trustExternal('', '', false);
+        $_POST = [];
+
+        global $auth;
+        $auth = new LoginAuth();
+        $ACT = 'saml_sls';
+        auth_logoff();
+
+        $ACT = 'login';
+        (new LoginAuth())->trustExternal('', '', false);
+
+        $this->assertNotNull($this->getRequestId(), 'the wiki did not ask the identity provider');
     }
 
     /**
