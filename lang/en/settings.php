@@ -10,7 +10,7 @@ $lang['slo_endpoint'] = '(optional) The address of the Single Logout service of 
 $lang['certificate'] = 'The signing certificates of the IdP as PEM blocks, each between a <code>-----BEGIN CERTIFICATE-----</code> and an <code>-----END CERTIFICATE-----</code> line. The wiki accepts a signature of every certificate here, so you can add the new one before the IdP changes its key. Use the <a href="?do=admin&amp;page=saml">SAML Configuration Helper</a> to set this.';
 $lang['lowercase'] = 'Make user and group names lower case? (recommended)';
 $lang['autoprovisioning'] = 'Create a user in the wiki at the first login? Otherwise only pre-created users are accepted.';
-$lang['use_slo'] = 'Send the user to the IdP for a Single Logout at logout? Most IdP support this poorly, if at all.';
+$lang['use_slo'] = 'Send the user to the IdP for a Single Logout at logout. Without this the login at the IdP stays, so a new login to the wiki can happen without a password. Needs a Single Logout address above.';
 $lang['auto_login'] = 'When to log the user in automatically? <code>never</code> does not; <code>after login</code> does for a user who did not log out; <code>always</code> does for everybody.';
 $lang['sign_requests'] = 'Sign the messages that the wiki sends to the IdP? The IdP needs the certificate of the wiki for this. Use the <a href="?do=admin&amp;page=saml">SAML Configuration Helper</a> to set this.';
 $lang['want_encrypted'] = 'Require an encrypted assertion? <code>RSA-OAEP-MGF1P</code> is the only supported key transport.';
