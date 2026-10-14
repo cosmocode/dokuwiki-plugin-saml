@@ -5,7 +5,10 @@ use dokuwiki\plugin\saml\LogoutHandler;
 use dokuwiki\plugin\saml\Session;
 use dokuwiki\plugin\saml\Settings;
 use OneLogin\Saml2\Auth;
+use OneLogin\Saml2\Constants;
+use OneLogin\Saml2\Metadata;
 use OneLogin\Saml2\Settings as LibrarySettings;
+use RobRichards\XMLSecLibs\XMLSecurityKey;
 
 /**
  * SAML authentication plugin
@@ -90,13 +93,51 @@ class helper_plugin_saml extends Plugin
      */
     public function getMetadata()
     {
-        $settings = new LibrarySettings($this->getSettings()->toArray(), true);
+        $config = $this->getSettings()->toArray();
+        // the plugin signs the metadata itself, after it added the encryption algorithm
+        $config['security']['signMetadata'] = false;
+        $settings = new LibrarySettings($config, true);
 
-        return $settings->getSPMetadata(
-            true, // publish the certificate for encryption as well
+        $xml = $settings->getSPMetadata(
+            false, // the certificate for encryption travels when the wiki wants encryption
             null, // validUntil: the next parameter drops it
             null, // cacheDuration: the default of one week
             true // no validUntil: an admin may upload this file by hand once
         );
+
+        return Metadata::signMetadata(
+            $this->addEncryptionMethod($xml),
+            $settings->getSPkey(),
+            $settings->getSPcert(),
+            $config['security']['signatureAlgorithm'],
+            $config['security']['digestAlgorithm']
+        );
+    }
+
+    /**
+     * Name the key transport that this wiki can read
+     *
+     * xmlseclibs decrypts RSA-OAEP with the digest SHA-1 only. Without this element an
+     * identity provider picks its own standard, which is SHA-256 for Keycloak, and the
+     * wiki cannot read the assertion. The library writes no EncryptionMethod itself.
+     *
+     * @param string $xml the metadata
+     * @return string the metadata with the algorithm of each encryption certificate
+     */
+    protected function addEncryptionMethod($xml)
+    {
+        $doc = new DOMDocument();
+        $doc->loadXML($xml);
+
+        foreach ($doc->getElementsByTagNameNS(Constants::NS_MD, 'KeyDescriptor') as $descriptor) {
+            if ($descriptor->getAttribute('use') !== 'encryption') continue;
+
+            // the schema puts EncryptionMethod after KeyInfo
+            $method = $doc->createElementNS(Constants::NS_MD, 'md:EncryptionMethod');
+            $method->setAttribute('Algorithm', XMLSecurityKey::RSA_OAEP_MGF1P);
+            $descriptor->appendChild($method);
+        }
+
+        return $doc->saveXML();
     }
 }

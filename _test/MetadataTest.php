@@ -5,6 +5,8 @@ namespace dokuwiki\plugin\saml\test;
 use DOMDocument;
 use dokuwiki\plugin\saml\KeyStore;
 use OneLogin\Saml2\Constants;
+use OneLogin\Saml2\Utils;
+use RobRichards\XMLSecLibs\XMLSecurityKey;
 
 /**
  * Tests for the SP metadata that describes this wiki
@@ -83,7 +85,7 @@ class MetadataTest extends AbstractMessageTest
     }
 
     /**
-     * The certificate of the wiki is published for signatures and for encryption
+     * The certificate of the wiki is published for its signature
      */
     public function testCertificates()
     {
@@ -96,8 +98,55 @@ class MetadataTest extends AbstractMessageTest
         ));
 
         $this->assertEquals(1, substr_count($xml, 'use="signing"'));
-        $this->assertEquals(1, substr_count($xml, 'use="encryption"'));
         $this->assertStringContainsString(substr($certificate, 0, 60), $xml);
+    }
+
+    /**
+     * The certificate for encryption travels only when the wiki wants an encrypted assertion
+     *
+     * An identity provider builds its client from this file. A certificate that the wiki
+     * publishes without need invites an encryption that the admin never asked for.
+     */
+    public function testEncryptionCertificate()
+    {
+        $this->assertEquals(0, substr_count($this->getMetadata(), 'use="encryption"'));
+        $this->assertEquals(1, substr_count($this->getMetadata(['want_encrypted' => 1]), 'use="encryption"'));
+    }
+
+    /**
+     * The metadata names the key transport that the wiki can read
+     *
+     * xmlseclibs reads RSA-OAEP with the digest SHA-1 only. Without this element an
+     * identity provider picks its own standard and the wiki cannot read the assertion.
+     */
+    public function testEncryptionMethod()
+    {
+        $doc = new DOMDocument();
+        $doc->loadXML($this->getMetadata(['want_encrypted' => 1]));
+
+        $methods = $doc->getElementsByTagNameNS(Constants::NS_MD, 'EncryptionMethod');
+
+        $this->assertEquals(1, $methods->length);
+        $this->assertEquals(XMLSecurityKey::RSA_OAEP_MGF1P, $methods->item(0)->getAttribute('Algorithm'));
+        $this->assertEquals('KeyDescriptor', $methods->item(0)->parentNode->localName);
+        $this->assertEquals('encryption', $methods->item(0)->parentNode->getAttribute('use'));
+    }
+
+    /**
+     * The signature of the metadata covers what the plugin added to it
+     */
+    public function testSignatureIsValid()
+    {
+        global $conf;
+        $certificate = io_readFile($conf['metadir'] . '/_saml.crt', false);
+
+        foreach ([0, 1] as $encrypted) {
+            $xml = $this->getMetadata(['want_encrypted' => $encrypted]);
+            $this->assertTrue(
+                Utils::validateSign($xml, $certificate, null, 'sha256', '//md:EntityDescriptor/ds:Signature'),
+                'the signature of the metadata is not valid'
+            );
+        }
     }
 
     /**
@@ -111,7 +160,7 @@ class MetadataTest extends AbstractMessageTest
         $this->getMetadata();
         (new KeyStore())->rotate();
 
-        $xml = $this->getMetadata();
+        $xml = $this->getMetadata(['want_encrypted' => 1]);
 
         $this->assertEquals(1, substr_count($xml, 'use="signing"'));
         $this->assertEquals(1, substr_count($xml, 'use="encryption"'));
