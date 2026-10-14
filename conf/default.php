@@ -12,7 +12,6 @@ $conf['lowercase'] = 1;
 $conf['autoprovisioning'] = 1;
 $conf['use_slo'] = 0;
 $conf["auto_login"] = "never";
-$conf['allow_unsolicited'] = 1;
 $conf['sign_requests'] = 0;
 $conf['want_assertions_signed'] = 0;
 $conf['want_encrypted'] = 0;

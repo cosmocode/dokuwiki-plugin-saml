@@ -32,6 +32,10 @@ class LoginTest extends AbstractMessageTest
         global $conf;
         $conf['plugin']['saml'] = $this->getConf();
         $_SESSION = [];
+
+        // the identity provider of the tests is on another site, so the browser sends
+        // no session cookie with its response
+        unset($_COOKIE[DOKU_SESSION_NAME]);
     }
 
     /**
@@ -130,6 +134,37 @@ class LoginTest extends AbstractMessageTest
     protected function getRequestId()
     {
         return $_SESSION[DOKU_COOKIE]['plugin']['saml']['requestid'] ?? null;
+    }
+
+    /**
+     * A response that no request of this browser answers is refused
+     *
+     * The browser sends the session cookie of the wiki, so the wiki sees the session in
+     * which it would have kept the identifier of its request. The empty session proves
+     * that this wiki started no login.
+     */
+    public function testRefusesUnsolicited()
+    {
+        $_COOKIE[DOKU_SESSION_NAME] = 'session1';
+        $_POST['SAMLResponse'] = $this->getResponse();
+
+        $ok = (new LoginAuth())->trustExternal('', '', false);
+
+        $this->assertFalse($ok);
+    }
+
+    /**
+     * A response that answers the request of this browser logs the user in
+     */
+    public function testAcceptsOwnRequest()
+    {
+        $_COOKIE[DOKU_SESSION_NAME] = 'session1';
+        $_SESSION[DOKU_COOKIE]['plugin']['saml']['requestid'] = '_request1';
+        $_POST['SAMLResponse'] = $this->getResponse(['inResponseTo' => '_request1']);
+
+        $ok = (new LoginAuth())->trustExternal('', '', false);
+
+        $this->assertTrue($ok);
     }
 
     /**

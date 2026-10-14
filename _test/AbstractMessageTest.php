@@ -97,7 +97,6 @@ abstract class AbstractMessageTest extends DokuWikiTest
             'autoprovisioning' => 1,
             'auto_login' => 'never',
             'use_slo' => 0,
-            'allow_unsolicited' => 1,
             'sign_requests' => 0,
             'want_assertions_signed' => 0,
             'want_encrypted' => 0,

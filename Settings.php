@@ -99,7 +99,7 @@ class Settings
                 // Destination of a response has to match it exactly
                 'destinationStrictlyMatches' => true,
                 // the plugin decides about a response that answers an unknown request
-                // itself, with the allow_unsolicited setting
+                // itself, see seesOwnSession() of the auth plugin
                 'rejectUnsolicitedResponsesWithInResponseTo' => false,
                 'allowRepeatAttributeName' => true,
             ],

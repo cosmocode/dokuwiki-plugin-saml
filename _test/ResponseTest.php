@@ -285,8 +285,8 @@ class ResponseTest extends AbstractMessageTest
      *
      * The browser does not send the session cookie of the wiki with the cross site POST
      * of an identity provider on another domain, so the request id is missing although
-     * this wiki did send a request. The plugin applies the allow_unsolicited setting to
-     * this case, the library must not refuse it by itself.
+     * this wiki did send a request. The plugin decides about this case itself, the
+     * library must not refuse it by itself.
      */
     public function testUnknownInResponseTo()
     {

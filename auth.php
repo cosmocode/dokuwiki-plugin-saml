@@ -179,11 +179,10 @@ class auth_plugin_saml extends auth_plugin_authplain
         global $ID;
         global $INPUT;
 
-        // A response answers the request of this session, one time only. The session may
-        // be empty: the browser does not send its cookie with a cross site POST.
+        // A response answers the request of this session, one time only
         $requestId = $this->session->getRequestId();
         $this->session->clearRequestId();
-        if ($requestId === null && !$this->getConf('allow_unsolicited')) {
+        if ($requestId === null && $this->seesOwnSession()) {
             return $this->abortLogin($this->getLang('err_unsolicited'));
         }
 
@@ -227,6 +226,23 @@ class auth_plugin_saml extends auth_plugin_authplain
         } catch (Exception $e) {
             return $this->abortLogin('Invalid SAML response: ' . hsc($e->getMessage()));
         }
+    }
+
+    /**
+     * Does the browser show the wiki the session that it started the login in?
+     *
+     * The session keeps the identifier of the request to the identity provider, and the
+     * browser sends the session cookie of the wiki with the response of the identity
+     * provider only when both are on the same site: the cookie carries SameSite=Lax.
+     * With the cookie an empty session means that the wiki started no login, so the
+     * response is unsolicited and the plugin refuses it. Without the cookie the wiki
+     * cannot tell the two apart and has to accept the response.
+     *
+     * @return bool false when the browser sent no session cookie
+     */
+    protected function seesOwnSession()
+    {
+        return isset($_COOKIE[DOKU_SESSION_NAME]);
     }
 
     /**
