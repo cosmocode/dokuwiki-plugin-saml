@@ -72,7 +72,7 @@ class Settings
                     'binding' => Constants::BINDING_HTTP_REDIRECT,
                 ],
                 'NameIDFormat' => Constants::NAMEID_UNSPECIFIED,
-                'x509cert' => $this->getCertificate(),
+                'x509certMulti' => ['signing' => $this->getCertificates()],
             ],
 
             'security' => [
@@ -135,19 +135,26 @@ class Settings
     }
 
     /**
-     * The signing certificate of the identity provider
+     * The signing certificates of the identity provider
      *
-     * The configuration may hold the certificate with or without the PEM header and footer.
+     * The configuration holds one or more certificates, with or without the PEM header
+     * and footer. More than one certificate lets the identity provider change its key
+     * without a break: the wiki accepts a signature of each of them.
      *
-     * @return string the certificate in PEM format
+     * @return array the base64 body of each certificate, the library adds the header
      */
-    protected function getCertificate()
+    protected function getCertificates()
     {
-        $cert = wordwrap($this->conf['certificate'], 65, "\n", true);
-        $cert = trim($cert);
-        if (!preg_match('/^-----BEGIN CERTIFICATE-----.*-----END CERTIFICATE-----$/s', $cert)) {
-            return "-----BEGIN CERTIFICATE-----\n$cert\n-----END CERTIFICATE-----";
+        $config = trim($this->conf['certificate']);
+        if ($config === '') return [];
+
+        if (preg_match_all('/-----BEGIN CERTIFICATE-----(.*?)-----END CERTIFICATE-----/s', $config, $match)) {
+            $certs = $match[1];
+        } else {
+            // a configuration from the adfs plugin holds the base64 body alone
+            $certs = [$config];
         }
-        return $cert;
+
+        return array_map(static fn($cert) => (string)preg_replace('/\s+/', '', $cert), $certs);
     }
 }

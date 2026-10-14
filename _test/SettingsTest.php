@@ -30,6 +30,19 @@ class SettingsTest extends DokuWikiTest
     protected const CERTBODY = 'MIIBCgKCAQEAwJ6Z3Z6Z3Z6Z3Z6Z3Z6Z3Z6Z3Z6Z3Z6Z3Z6Z3Z6Z3Z6Z3Z6Z3Z6Z3Z6Z3Z6Z3Z6Z3Z6Z3Z6Z';
 
     /**
+     * A certificate body in PEM format
+     *
+     * @param string $body the base64 body
+     * @return string
+     */
+    protected function getPem($body)
+    {
+        return "-----BEGIN CERTIFICATE-----\n" .
+            wordwrap($body, 64, "\n", true) .
+            "\n-----END CERTIFICATE-----\n";
+    }
+
+    /**
      * The plugin configuration that the tests start from
      *
      * @param array $overrides settings that differ from the default
@@ -58,40 +71,45 @@ class SettingsTest extends DokuWikiTest
     }
 
     /**
-     * A certificate without the PEM header and footer gets them
+     * A bare certificate body gives one signing certificate
      */
     public function testBareCertificate()
     {
         $settings = (new Settings($this->getConf()))->toArray();
 
-        $this->assertStringStartsWith("-----BEGIN CERTIFICATE-----\n", $settings['idp']['x509cert']);
-        $this->assertStringEndsWith("\n-----END CERTIFICATE-----", $settings['idp']['x509cert']);
-        $this->assertStringContainsString(substr(self::CERTBODY, 0, 64), $settings['idp']['x509cert']);
+        $this->assertEquals([self::CERTBODY], $settings['idp']['x509certMulti']['signing']);
     }
 
     /**
-     * A certificate in PEM format is taken as it is
+     * A certificate in PEM format gives the same value as its bare body
      */
     public function testPemCertificate()
     {
-        $pem = "-----BEGIN CERTIFICATE-----\n" .
-            wordwrap(self::CERTBODY, 64, "\n", true) .
-            "\n-----END CERTIFICATE-----";
-        $settings = (new Settings($this->getConf(['certificate' => $pem])))->toArray();
+        $settings = (new Settings($this->getConf(['certificate' => $this->getPem(self::CERTBODY)])))->toArray();
 
-        $this->assertEquals($pem, $settings['idp']['x509cert']);
+        $this->assertEquals([self::CERTBODY], $settings['idp']['x509certMulti']['signing']);
     }
 
     /**
-     * A certificate on a single long line is wrapped
+     * Every PEM block gives a signing certificate
      */
-    public function testWrappedCertificate()
+    public function testTwoCertificates()
     {
-        $settings = (new Settings($this->getConf()))->toArray();
+        $other = strtr(self::CERTBODY, ['Z' => 'Y']);
+        $config = $this->getPem(self::CERTBODY) . "\n" . $this->getPem($other);
+        $settings = (new Settings($this->getConf(['certificate' => $config])))->toArray();
 
-        foreach (explode("\n", $settings['idp']['x509cert']) as $line) {
-            $this->assertLessThanOrEqual(65, strlen($line));
-        }
+        $this->assertEquals([self::CERTBODY, $other], $settings['idp']['x509certMulti']['signing']);
+    }
+
+    /**
+     * A configuration without a certificate gives none
+     */
+    public function testNoCertificate()
+    {
+        $settings = (new Settings($this->getConf(['certificate' => ''])))->toArray();
+
+        $this->assertEquals([], $settings['idp']['x509certMulti']['signing']);
     }
 
     /**

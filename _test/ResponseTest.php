@@ -130,6 +130,23 @@ class ResponseTest extends AbstractMessageTest
     }
 
     /**
+     * While the identity provider changes its key both certificates are valid
+     */
+    public function testTwoCertificates()
+    {
+        $conf = ['certificate' => $this->getPem('crt') . "\n" . $this->getPem('crt', 'other')];
+
+        foreach (['idp', 'other'] as $signer) {
+            $saml = $this->getLib($conf);
+            $_POST['SAMLResponse'] = $this->getResponse(['signer' => $signer]);
+
+            $saml->processResponse();
+
+            $this->assertTrue($saml->isAuthenticated(), $signer . ': ' . ($saml->getLastErrorReason() ?? ''));
+        }
+    }
+
+    /**
      * A response with a broken signature is refused
      */
     public function testBrokenSignature()

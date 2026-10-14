@@ -113,6 +113,20 @@ class LogoutTest extends AbstractMessageTest
     }
 
     /**
+     * While the identity provider changes its key both certificates are valid
+     */
+    public function testTwoCertificates()
+    {
+        $this->login();
+        $this->sendByRedirect($this->getLogoutMessage(), true, true, 'other');
+
+        $conf = ['certificate' => $this->getPem('crt') . "\n" . $this->getPem('crt', 'other')];
+        $this->getHandler($conf)->handleRequest($_GET['SAMLRequest']);
+
+        $this->assertFalse($this->isLoggedIn());
+    }
+
+    /**
      * A request of another identity provider is refused
      */
     public function testWrongIssuer()
