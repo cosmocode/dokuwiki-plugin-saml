@@ -1,0 +1,71 @@
+# Keycloak as a SAML identity provider to test the saml plugin.
+#
+#   docker compose up -d
+#
+# Admin console:  http://localhost:18080/  (admin / admin)
+# Realm:          dokuwiki
+# IdP metadata:   http://localhost:18080/realms/dokuwiki/protocol/saml/descriptor
+# Test users:     alice / alice   (group wikiusers)
+#                 bob / bob       (groups wikiusers, wikiadmins)
+#
+# The realm is a default one with two users. Create a SAML client from the SP
+# metadata of your wiki ("?do=saml") and add the attribute mappers that the
+# plugin asks for.
+#
+# The data of the server stays in a volume, so the changes that you make in the
+# admin console survive a restart. The realm below is imported on the first
+# start only. "docker compose down -v" drops the volume and starts anew.
+
+services:
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.8
+    container_name: dokuwiki-saml-idp
+    command: ["start-dev", "--import-realm"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+      KC_HEALTH_ENABLED: "true"
+    ports:
+      - "18080:8080"
+    volumes:
+      - keycloak-data:/opt/keycloak/data
+    configs:
+      - source: dokuwiki-realm
+        target: /opt/keycloak/data/import/dokuwiki-realm.json
+
+volumes:
+  keycloak-data:
+
+configs:
+  dokuwiki-realm:
+    content: |
+      {
+        "realm": "dokuwiki",
+        "enabled": true,
+        "groups": [
+          { "name": "wikiusers" },
+          { "name": "wikiadmins" }
+        ],
+        "users": [
+          {
+            "username": "alice",
+            "enabled": true,
+            "emailVerified": true,
+            "email": "alice@example.com",
+            "firstName": "Alice",
+            "lastName": "Anderson",
+            "credentials": [{ "type": "password", "value": "alice", "temporary": false }],
+            "groups": ["/wikiusers"]
+          },
+          {
+            "username": "bob",
+            "enabled": true,
+            "emailVerified": true,
+            "email": "bob@example.com",
+            "firstName": "Bob",
+            "lastName": "Brown",
+            "credentials": [{ "type": "password", "value": "bob", "temporary": false }],
+            "groups": ["/wikiusers", "/wikiadmins"]
+          }
+        ]
+      }
