@@ -1,6 +1,6 @@
 base   saml
 author Andreas Gohr
-email  gohr@cosmocode.de
+email  dokuwiki@cosmocode.de
 date   2026-10-12
 name   SAML Auth plugin
 desc   Provides user authentication against a SAML 2.0 identity provider

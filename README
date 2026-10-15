@@ -11,15 +11,11 @@ If you install this plugin manually, make sure it is installed in
 lib/plugins/saml/ - if the folder is called different it
 will not work!
 
-The plugin needs the libraries in the vendor/ directory. A release
-archive contains them. After a checkout of the sources run
-"composer install --no-dev" in the plugin directory.
-
 Please refer to https://www.dokuwiki.org/plugins for additional info
 on how to install plugins in DokuWiki.
 
 ----
-Copyright (C) Andreas Gohr <gohr@cosmocode.de>
+Copyright (C) Andreas Gohr <dokuwiki@cosmocode.de>
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
