@@ -343,10 +343,19 @@ class auth_plugin_saml extends auth_plugin_authplain
     /**
      * Should the user be sent to the identity provider without a click on the login button?
      *
+     * A page of the wiki is the only place where this happens. Only doku.php sets $ACT, so
+     * a media file, an AJAX call or a feed keeps its answer. The actions of this plugin and
+     * the logout carry a message or end a session, which a redirect would throw away.
+     *
      * @return bool
      */
     protected function isAutoLogin()
     {
+        global $ACT;
+
+        if (!isset($ACT)) return false;
+        if (in_array(act_clean($ACT), ['saml', 'saml_sls', 'logout'], true)) return false;
+
         $mode = $this->getConf('auto_login');
         if ($mode == 'always') return true;
         if ($mode == 'after login') return (bool)get_doku_pref('saml_autologin', 0);

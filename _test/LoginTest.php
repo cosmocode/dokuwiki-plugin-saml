@@ -174,6 +174,77 @@ class LoginTest extends AbstractMessageTest
     }
 
     /**
+     * The automatic login sends the user to the identity provider
+     */
+    public function testAutoLogin()
+    {
+        global $conf;
+        global $ACT;
+        $conf['plugin']['saml']['auto_login'] = 'always';
+        $ACT = 'show';
+
+        $ok = (new LoginAuth())->trustExternal('', '', false);
+
+        $this->assertFalse($ok);
+        $this->assertNotNull($this->getRequestId(), 'the wiki asked no identity provider');
+    }
+
+    /**
+     * The actions that an automatic login must leave alone
+     *
+     * @return array
+     */
+    public function provideQuietActions()
+    {
+        return [
+            'the SP metadata' => ['saml'],
+            'the Single Logout Service' => ['saml_sls'],
+            'the logout' => ['logout'],
+        ];
+    }
+
+    /**
+     * The automatic login keeps away from the actions of the plugin and from the logout
+     *
+     * These actions carry a message of the identity provider or end a session. A redirect
+     * to the identity provider would throw the message away, and a logout would end in a
+     * new login.
+     *
+     * @dataProvider provideQuietActions
+     * @param string $act the action of the request
+     */
+    public function testNoAutoLoginOnOwnActions($act)
+    {
+        global $conf;
+        global $ACT;
+        $conf['plugin']['saml']['auto_login'] = 'always';
+        $ACT = $act;
+
+        $ok = (new LoginAuth())->trustExternal('', '', false);
+
+        $this->assertFalse($ok);
+        $this->assertNull($this->getRequestId(), 'the wiki asked the identity provider');
+    }
+
+    /**
+     * The automatic login happens on a page of the wiki only
+     *
+     * Only doku.php sets $ACT. A media file, an AJAX call and a feed need their own
+     * answer, which a login page of the identity provider does not give them.
+     */
+    public function testNoAutoLoginWithoutAction()
+    {
+        global $conf;
+        $conf['plugin']['saml']['auto_login'] = 'always';
+        unset($GLOBALS['ACT']);
+
+        $ok = (new LoginAuth())->trustExternal('', '', false);
+
+        $this->assertFalse($ok);
+        $this->assertNull($this->getRequestId(), 'the wiki asked the identity provider');
+    }
+
+    /**
      * The identifier of the request that the wiki sent to the identity provider
      *
      * @return string|null
