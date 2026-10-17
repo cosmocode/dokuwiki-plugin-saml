@@ -37,7 +37,7 @@ class Settings
     public function toArray()
     {
         global $conf;
-        $title = htmlentities($conf['title']);
+        $title = htmlspecialchars($conf['title'], ENT_XML1 | ENT_QUOTES, 'UTF-8');
 
         return [
             'strict' => true,
